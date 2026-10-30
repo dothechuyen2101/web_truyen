@@ -1,6 +1,7 @@
 import { Prisma, prisma, type Source, type StoryType } from "@truyen/db";
 import { slugify, toSearchText } from "@truyen/shared";
 import { getAdapter } from "./adapters";
+import { HttpError } from "./http";
 import type { ChapterRef, StoryDetail, StoryRef } from "./types";
 
 const CHUNK = 2000;
@@ -41,6 +42,44 @@ export async function withCrawlRun<T extends object>(
         finishedAt: new Date(),
       },
     });
+    throw error;
+  }
+}
+
+// ---------- Danh sách bỏ qua ----------
+
+/** Truyện bị nguồn chặn (403) hoặc đã xoá (404) được bỏ qua trong khoảng này */
+const SKIP_DAYS = 7;
+
+/** Bỏ những path đang trong danh sách bỏ qua. */
+export async function withoutSkipped(sourceId: number, paths: string[]) {
+  if (!paths.length) return paths;
+  const skipped = await prisma.crawlSkip.findMany({
+    where: { sourceId, path: { in: paths }, until: { gt: new Date() } },
+    select: { path: true },
+  });
+  const set = new Set(skipped.map((s) => s.path));
+  return paths.filter((p) => !set.has(p));
+}
+
+/**
+ * Đồng bộ một truyện và ghi CrawlRun. Nguồn chặn (403, vd Cloudflare challenge) hoặc truyện
+ * đã bị xoá (404) thì đưa vào danh sách bỏ qua — thử lại vô ích, không vượt chặn.
+ */
+export async function syncTracked(source: Source, path: string) {
+  try {
+    return await withCrawlRun("syncStory", { sourceId: source.id, target: path }, () => syncStory(source, path));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    await prisma.storySource.updateMany({ where: { sourceId: source.id, path }, data: { lastError: reason } });
+    if (error instanceof HttpError && (error.status === 403 || error.status === 404)) {
+      const until = new Date(Date.now() + SKIP_DAYS * 24 * 3600 * 1000);
+      await prisma.crawlSkip.upsert({
+        where: { sourceId_path: { sourceId: source.id, path } },
+        create: { sourceId: source.id, path, reason, until },
+        update: { reason, until },
+      });
+    }
     throw error;
   }
 }

@@ -1,6 +1,9 @@
+# Dev: CSDL chính là Supabase (DATABASE_URL trong .env), không cần dịch vụ nào khác.
+# Muốn chạy Postgres cục bộ (làm việc offline): pnpm db:up (docker compose --profile local-db up -d)
 services:
   postgres:
     image: postgres:16-alpine
+    profiles: ["local-db"]
     restart: unless-stopped
     environment:
       POSTGRES_USER: truyen
@@ -16,20 +19,6 @@ services:
       timeout: 3s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
 
 volumes:
   pgdata:
-  redisdata:

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Hai image: `web` (Next.js standalone) và `worker` (crawler BullMQ, cũng dùng để chạy migrate/seed).
+# Hai image: `web` (Next.js standalone) và `worker` (vòng lặp chạy đợt crawl, cũng dùng để chạy migrate/seed).
 
 FROM node:22-alpine AS base
 # openssl: Prisma CLI (migrate) cần khi chạy trên Alpine.

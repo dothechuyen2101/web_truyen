@@ -5,7 +5,6 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { admin } from "better-auth/plugins";
 import { prisma } from "@truyen/db";
-import { redis } from "./redis";
 import { SITE_NAME } from "./site";
 
 export const googleEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
@@ -13,24 +12,6 @@ export const googleEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env
 export const auth = betterAuth({
   appName: SITE_NAME,
   database: prismaAdapter(prisma, { provider: "postgresql" }),
-  // Session và bộ đếm giới hạn tần suất lưu ở Redis để chạy được nhiều instance web.
-  secondaryStorage: {
-    get: (key) => redis.get(`auth:${key}`),
-    getAndDelete: (key) => redis.getdel(`auth:${key}`),
-    // Bộ đếm (giới hạn tần suất): TTL chỉ đặt ở lần tăng đầu tiên của cửa sổ.
-    increment: async (key, ttl) => {
-      const k = `auth:${key}`;
-      const result = await redis.multi().incr(k).expire(k, ttl, "NX").exec();
-      return Number(result?.[0]?.[1] ?? 0);
-    },
-    set: async (key, value, ttl) => {
-      if (ttl) await redis.set(`auth:${key}`, value, "EX", ttl);
-      else await redis.set(`auth:${key}`, value);
-    },
-    delete: async (key) => {
-      await redis.del(`auth:${key}`);
-    },
-  },
   emailAndPassword: { enabled: true, minPasswordLength: 8, autoSignIn: true },
   socialProviders: googleEnabled
     ? {
@@ -40,10 +21,15 @@ export const auth = betterAuth({
         },
       }
     : undefined,
+  // Bản preview của Vercel có URL riêng (khác BETTER_AUTH_URL) — vẫn cho đăng nhập.
+  trustedOrigins: [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL]
+    .filter(Boolean)
+    .map((host) => `https://${host}`),
   session: { cookieCache: { enabled: true, maxAge: 5 * 60 } },
+  // Session và bộ đếm giới hạn tần suất lưu trong Postgres (không cần Redis, chạy được trên serverless).
   rateLimit: {
     enabled: true,
-    storage: "secondary-storage",
+    storage: "database",
     window: 60,
     max: 60,
     customRules: {

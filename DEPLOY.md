@@ -1,68 +1,117 @@
-# Triển khai lên VPS
+# Triển khai
 
-Hướng dẫn chạy Kho Truyện trên một VPS bằng Docker Compose, đặt Cloudflare phía trước làm CDN.
+Có 2 cách triển khai. Cả hai dùng chung CSDL **Supabase** và **không cần Redis**:
 
-## 1. Chuẩn bị
+- **A. Vercel + Supabase + cron-job.org**: miễn phí hoàn toàn, khuyên dùng khi mới bắt đầu.
+- **B. VPS + Docker Compose**: tự quản lý, không bị giới hạn hạn mức.
 
-- VPS Linux (Ubuntu 24.04 hoặc tương đương), tối thiểu **2 vCPU / 4 GB RAM / 40 GB SSD**.
-- Docker Engine kèm plugin Compose (`docker compose version`).
-- Một tên miền, DNS trỏ về IP của VPS.
-- Tường lửa chỉ mở cổng 22, 80, 443.
+Việc crawl chạy theo **đợt** (hàm `runCrawlTick`). Mỗi đợt quét trang "mới cập nhật" của các nguồn, đồng bộ truyện mới hoặc có chương mới, chạy tiếp backfill nếu đang bật, rồi nhận diện ảnh quảng cáo. Trên Vercel, đợt crawl được gọi qua `/api/cron/crawl`; trên VPS, worker gọi nó theo vòng lặp.
 
-## 2. Cấu hình
+## Chuẩn bị Supabase (cả 2 cách)
+
+1. Tạo project. Nếu người đọc chủ yếu ở Việt Nam, chọn vùng gần (Singapore, Seoul).
+2. Vào **Project Settings → Database → Connection pooling** và lấy 2 chuỗi kết nối:
+   - Cổng **6543** (chế độ transaction) cho ứng dụng, đặt vào `DATABASE_URL`.
+   - Cổng **5432** (chế độ session) cho migrate, đặt vào `DIRECT_URL`.
+
+   Kết nối trực tiếp `db.<ref>.supabase.co` chỉ có IPv6, nhiều máy không dùng được, nên hãy dùng pooler. Mật khẩu có ký tự đặc biệt phải mã hoá URL, vd `@` → `%40`. Thêm `?sslmode=require&uselibpqcompat=true` vào cuối mỗi chuỗi.
+3. Trên máy của bạn, điền 2 biến trên vào `.env` rồi tạo bảng và nạp danh sách nguồn:
+
+   ```bash
+   pnpm install
+   pnpm db:deploy     # tạo bảng + bật Row Level Security
+   pnpm db:seed       # thêm 4 nguồn crawl
+   ```
+
+---
+
+## A. Vercel (miễn phí)
+
+### 1. Tạo project
+
+1. Đẩy code lên GitHub, rồi trên Vercel chọn **Add New → Project** và import repo.
+2. Vercel tự nhận ra 2 thành phần (web Next.js và container từ `Dockerfile`). Chọn **Import single project** ở dòng **web (Next.js)**, không dùng preset *Services*.
+3. Kiểm tra lại các thiết lập:
+   - **Root Directory**: `apps/web`
+   - **Framework Preset**: Next.js. Giữ nguyên lệnh build/install mặc định.
+4. Mở mục **Environment Variables** và thêm các biến sau:
+
+| Biến | Giá trị |
+|---|---|
+| `DATABASE_URL` | Pooler Supabase, cổng 6543 |
+| `DIRECT_URL` | Pooler Supabase, cổng 5432 |
+| `IMAGE_PROXY_SECRET` | Chuỗi ngẫu nhiên, tạo bằng `openssl rand -base64 32`. Không đổi sau khi đã chạy. |
+| `BETTER_AUTH_SECRET` | Chuỗi ngẫu nhiên. Đổi giá trị này sẽ đăng xuất mọi người. |
+| `CRON_SECRET` | Chuỗi ngẫu nhiên, dùng để bảo vệ endpoint cron |
+| `NEXT_PUBLIC_SITE_URL`, `BETTER_AUTH_URL` | `https://<tên-project>.vercel.app`, hoặc tên miền riêng |
+| `NEXT_PUBLIC_SITE_NAME` | Tên site, vd `Kho Truyện` |
+| `ENABLE_EXPERIMENTAL_COREPACK` | `1`. Để Vercel dùng đúng pnpm 12 ghi trong `package.json`. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Tuỳ chọn |
+
+5. Bấm **Deploy**. Lúc build, Next.js đọc CSDL để prerender trang chủ và sitemap, nên phải chạy `pnpm db:deploy` (phần Chuẩn bị Supabase) trước.
+
+Nếu sau này đổi tên miền, nhớ sửa `NEXT_PUBLIC_SITE_URL` và `BETTER_AUTH_URL` rồi **Redeploy**. Các biến `NEXT_PUBLIC_*` được nhúng vào lúc build, nên đổi xong phải build lại mới có hiệu lực.
+
+### 2. Lịch crawl
+
+- **Vercel Cron**: `apps/web/vercel.json` đã cấu hình chạy 1 lần mỗi ngày lúc 3 giờ sáng giờ Việt Nam (gói Hobby chỉ cho tối đa 1 lần/ngày). Vercel tự gửi kèm `CRON_SECRET`.
+- **cron-job.org** (miễn phí) để chạy dày hơn. Tạo một cronjob như sau:
+  - URL: `https://<tên-miền>/api/cron/crawl?secret=<CRON_SECRET>`
+  - Phương thức GET, chạy **30 phút một lần**.
+
+  Endpoint trả lời ngay (202) rồi chạy nền, nên cron-job.org không phải chờ.
+
+Mỗi đợt mặc định chạy 120 giây (biến `CRAWL_TICK_SECONDS`). Kết quả từng đợt xem ở **Quản trị → Tổng quan → Đợt crawl gần nhất**.
+
+### 3. Tài khoản quản trị
+
+Đăng ký trên site, rồi trên máy của bạn (`.env` trỏ vào Supabase) chạy:
+
+```bash
+pnpm make-admin you@example.com
+```
+
+### 4. Hạn mức gói Hobby và lưu ý
+
+- Mỗi tháng: **4 giờ CPU, 360 GB-giờ RAM, 1 triệu lượt gọi function, khoảng 100 GB băng thông**. Vượt hạn mức thì tính năng đó bị khoá 30 ngày.
+  Với 30 phút một đợt × 120 giây, việc crawl dùng khoảng 1/4 hạn mức RAM.
+- **Proxy ảnh truyện tranh** (`/api/img`) tốn hạn mức nhất. Vercel CDN cache ảnh 1 năm (header `s-maxage`). Khi lượng đọc lớn, chuyển proxy ảnh sang Cloudflare Worker hoặc lên gói Pro.
+- Function chạy ở **Seoul (`icn1`)**, cạnh Supabase, cấu hình trong `vercel.json`. Đổi vùng Supabase thì đổi vùng ở đây cho khớp.
+- **Gói Hobby chỉ dành cho mục đích phi thương mại.** Bật quảng cáo (Quản trị → Quảng cáo) là sử dụng thương mại, phải lên gói Pro.
+- Vercel có thể gỡ nội dung hoặc khoá tài khoản khi nhận khiếu nại bản quyền. Hãy xử lý **Quản trị → Yêu cầu gỡ** kịp thời.
+
+---
+
+## B. VPS + Docker Compose
+
+- VPS Linux, tối thiểu **2 vCPU / 4 GB RAM**, cài Docker kèm plugin Compose.
+- Tốt nhất đặt VPS cùng vùng với Supabase.
 
 ```bash
 git clone <repo> /srv/web_truyen && cd /srv/web_truyen
-cp .env.production.example .env
-chmod 600 .env
+cp .env.production.example .env && chmod 600 .env       # điền giá trị thật
+
+docker compose -f docker-compose.prod.yml build worker
+docker compose -f docker-compose.prod.yml run --rm worker pnpm db:deploy
+docker compose -f docker-compose.prod.yml run --rm worker pnpm db:seed
+docker compose -f docker-compose.prod.yml build web
+docker compose -f docker-compose.prod.yml --profile caddy up -d   # Caddy tự lấy HTTPS cho SITE_DOMAIN
 ```
 
-Mở `.env` và điền:
-
-| Biến | Ghi chú |
-|---|---|
-| `POSTGRES_PASSWORD` | Mật khẩu dài ngẫu nhiên. Nhớ đổi cả trong `DATABASE_URL` và `BUILD_DATABASE_URL`. |
-| `IMAGE_PROXY_SECRET`, `BETTER_AUTH_SECRET` | Tạo bằng `openssl rand -base64 32`. Không đổi sau khi đã chạy: đổi `IMAGE_PROXY_SECRET` làm hỏng link ảnh đã cache, đổi `BETTER_AUTH_SECRET` đăng xuất mọi người. |
-| `SITE_DOMAIN`, `NEXT_PUBLIC_SITE_URL`, `BETTER_AUTH_URL` | Tên miền của bạn, dùng `https://` cho 2 biến URL. |
-| `GOOGLE_CLIENT_ID/SECRET` | Tuỳ chọn. Redirect URI là `https://<domain>/api/auth/callback/google`. |
-
-## 3. Khởi chạy lần đầu
-
-```bash
-# Postgres phải chạy trước: lúc build, Next.js cần đọc dữ liệu để prerender trang chủ và sitemap
-docker compose -f docker-compose.prod.yml up -d postgres redis
-
-docker compose -f docker-compose.prod.yml build
-docker compose -f docker-compose.prod.yml run --rm worker pnpm db:deploy   # tạo bảng
-docker compose -f docker-compose.prod.yml run --rm worker pnpm db:seed     # thêm các nguồn crawl
-
-# --profile caddy: Caddy tự lấy chứng chỉ HTTPS cho SITE_DOMAIN
-docker compose -f docker-compose.prod.yml --profile caddy up -d
-```
-
-Tạo tài khoản quản trị: đăng ký trên site rồi chạy
+Tạo admin:
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm worker pnpm make-admin you@example.com
 ```
 
-Worker bắt đầu quét các nguồn ngay khi khởi động. Muốn nạp toàn bộ kho truyện của một nguồn, vào **Quản trị → Nguồn crawl → Backfill toàn bộ**. Việc này chạy chậm theo giới hạn tốc độ, có thể mất vài ngày.
+- **Worker** chạy đợt crawl mỗi 15 phút (biến `CRAWL_INTERVAL_MINUTES`).
+- **Tự chạy Postgres thay cho Supabase:** dùng phần "Postgres chạy trên VPS" trong `.env.production.example` và thêm `--profile local-db` vào mọi lệnh.
+- **Cloudflare đứng trước VPS:**
+  - Bật proxy, đặt SSL **Full (strict)**.
+  - Cache rule cho `/api/img*` (tôn trọng header của server).
+  - Rate limit cho `/api/auth/*` và `/api/img*`.
 
-> Không dùng Caddy (ví dụ đã có Nginx hoặc dùng Cloudflare Tunnel)? Bỏ `--profile caddy`. Web lắng nghe ở `127.0.0.1:3000`.
-
-## 4. Cloudflare
-
-1. Bật proxy (biểu tượng đám mây cam) cho bản ghi DNS. Đặt **SSL/TLS → Full (strict)**.
-   Caddy lấy chứng chỉ qua HTTP-01. Nếu bật *Always Use HTTPS*, hãy loại trừ `/.well-known/acme-challenge/*`, hoặc để DNS-only trong lần lấy chứng chỉ đầu tiên.
-2. **Cache Rules:**
-   - `URI Path starts with /api/img` → *Eligible for cache*, Edge TTL *Use cache-control header*. Ảnh trả `immutable` 1 năm, đây là phần tiết kiệm băng thông nhiều nhất.
-   - `/_next/static/*` được Cloudflare cache sẵn.
-   - (Tuỳ chọn) Cache HTML: *Eligible for cache* cho mọi đường dẫn **trừ** `/admin*`, `/api/*`, `/dang-nhap`, `/dang-ky`, `/tu-truyen`, và tôn trọng `s-maxage` của server. Làm được vì phần riêng của từng người (theo dõi, bình luận, lịch sử) đều tải ở trình duyệt.
-3. **Rate limiting** (Security → WAF): giới hạn `/api/auth/*` và `/api/img*` theo IP để chống lạm dụng.
-
-Web đọc IP thật của người dùng từ header `CF-Connecting-IP` để đếm lượt xem và giới hạn tần suất.
-
-## 5. Cập nhật phiên bản
+Cập nhật phiên bản:
 
 ```bash
 git pull
@@ -71,49 +120,48 @@ docker compose -f docker-compose.prod.yml run --rm worker pnpm db:deploy
 docker compose -f docker-compose.prod.yml --profile caddy up -d
 ```
 
-## 6. Sao lưu
+---
+
+## Sao lưu
+
+Gói miễn phí của Supabase không có sao lưu tự động. Script dưới đây chạy `pg_dump` qua `DIRECT_URL` (cần Docker), lưu 7 ngày gần nhất:
 
 ```bash
-./scripts/backup-db.sh                      # tạo backups/truyen-<thời gian>.sql.gz, giữ 7 ngày
-crontab -e                                  # chạy tự động 3 giờ sáng mỗi ngày:
+./scripts/backup-db.sh                      # tạo backups/truyen-<thời gian>.sql.gz
+# cron trên máy luôn bật, 3 giờ sáng mỗi ngày:
 # 0 3 * * * cd /srv/web_truyen && ./scripts/backup-db.sh >> backups/backup.log 2>&1
 ```
 
-Nên chép thư mục `backups/` sang nơi khác (S3, R2, máy khác).
-
-Khôi phục:
+Khôi phục (bỏ tham số `uselibpqcompat` khỏi URL, vì `psql` không hiểu tham số này):
 
 ```bash
-gunzip -c backups/truyen-XXXX.sql.gz | docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"'
+gunzip -c backups/truyen-XXXX.sql.gz | docker run -i --rm postgres:17-alpine psql "postgresql://postgres.<ref>:<mật-khẩu>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require"
 ```
 
-Redis chỉ chứa hàng đợi, session và bộ đếm lượt xem chưa ghi xuống DB. Mất Redis thì người dùng phải đăng nhập lại, ngoài ra không mất dữ liệu quan trọng.
+## Theo dõi
 
-## 7. Theo dõi
+- `/api/health` trả 200 khi CSDL phản hồi. Có thể gắn vào UptimeRobot hoặc Better Stack.
+- **Quản trị → Tổng quan**: đợt crawl gần nhất, số job lỗi trong 24 giờ, tình trạng từng nguồn.
+- Log: trên Vercel xem ở **Logs**; trên VPS dùng `docker compose -f docker-compose.prod.yml logs -f worker web`.
 
-- `https://<domain>/api/health`: trả 200 khi Postgres và Redis đều ổn. Gắn vào UptimeRobot hoặc Better Stack.
-- **Quản trị → Tổng quan**: số job lỗi trong 24 giờ, hàng đợi, tình trạng từng nguồn.
-- Log: `docker compose -f docker-compose.prod.yml logs -f worker web`
-
-## 8. Sự cố thường gặp
+## Sự cố thường gặp
 
 | Hiện tượng | Cách xử lý |
 |---|---|
 | Nguồn đổi tên miền, crawl lỗi hàng loạt | **Quản trị → Nguồn crawl**, sửa Domain rồi Lưu. |
-| Nguồn trả 403 cho một số truyện (Cloudflare challenge) | Hệ thống tự bỏ qua truyện đó 7 ngày. Không vượt chặn; nguồn dự phòng có truyện đó thì sẽ được dùng. |
-| Nguồn trả 429/503 | HTTP client tự tạm dừng host đó (theo `Retry-After`). Nếu kéo dài, tăng "Giãn cách (ms)" của nguồn. |
-| `docker compose build` lỗi kết nối DB | Postgres chưa chạy hoặc `BUILD_DATABASE_URL` sai (phải là `127.0.0.1:5432`). |
-| Build hoặc chạy trong mạng có proxy/antivirus giải mã TLS (lỗi `certificate not trusted`, `SELF_SIGNED_CERT_IN_CHAIN`) | Build: `docker build --secret id=extra_ca,src=ca.pem …`. Chạy: mount chứng chỉ vào container và đặt `NODE_EXTRA_CA_CERTS`. Trên VPS thường không gặp. |
+| Nguồn trả 403 cho một số truyện (Cloudflare challenge) | Truyện đó tự vào danh sách bỏ qua 7 ngày. Không vượt chặn; nguồn dự phòng có truyện đó thì sẽ được dùng. |
+| Nguồn trả 429/503 | HTTP client tự tạm dừng host đó. Nếu kéo dài, tăng "Giãn cách (ms)" của nguồn. |
+| "Đợt crawl gần nhất" không đổi | Kiểm tra cronjob trên cron-job.org (URL, `secret`) và `CRON_SECRET` trên Vercel. Gọi thử URL bằng trình duyệt: phải trả `{"ok":true,"started":true}`. |
+| Build trên Vercel lỗi kết nối CSDL | Kiểm tra `DATABASE_URL` trên Vercel và đã chạy `pnpm db:deploy` chưa. |
+| Build trên Vercel lỗi do pnpm | Kiểm tra đã đặt `ENABLE_EXPERIMENTAL_COREPACK=1`. |
+| `ENOTFOUND db.<ref>.supabase.co` | Máy không có IPv6. Dùng địa chỉ pooler. |
+| `tenant/user … not found` | Sai cụm pooler (`aws-0` hay `aws-1`) hoặc sai vùng. Copy đúng chuỗi trong trang Connection pooling. |
+| Mạng có proxy/antivirus giải mã TLS (`certificate not trusted`) | Build Docker: `docker build --secret id=extra_ca,src=ca.pem …`. |
 
-## 9. Mở rộng
-
-- **Nhiều instance web:** session và giới hạn tần suất đã nằm ở Redis nên chạy song song được. Cache `use cache` của Next nằm trong bộ nhớ từng instance; khi cần chia sẻ, cấu hình [`cacheHandlers`](https://nextjs.org/docs/app/api-reference/config/next-config-js/cacheHandlers) dùng Redis.
-- **Crawl nhanh hơn:** tăng `concurrency` trong `apps/worker/src/index.ts`, hoặc chạy thêm container worker (BullMQ tự chia job). Giới hạn tốc độ tính theo từng process, nên khi chạy nhiều worker hãy tăng "Giãn cách" của nguồn tương ứng.
-- **Postgres:** khi kho lớn (hàng triệu chương), chuyển sang Postgres managed hoặc máy riêng, nhớ bật sao lưu định kỳ.
-
-## 10. Bảo mật
+## Bảo mật
 
 - Xoá các tài khoản thử nghiệm và đặt mật khẩu mạnh cho admin.
-- Không commit `.env`. Giữ quyền `600` cho file này.
-- Postgres chỉ mở ở `127.0.0.1`, Redis không mở ra ngoài.
-- Theo dõi **Quản trị → Yêu cầu gỡ** và xử lý yêu cầu bản quyền kịp thời.
+- Không commit `.env`.
+- Các bảng trong `public` đều bật **Row Level Security** và không có policy nào, nên REST API của Supabase không đọc được dữ liệu. Ứng dụng kết nối bằng chủ sở hữu bảng nên không bị chặn.
+  Khi thêm bảng mới, nhớ thêm `ALTER TABLE … ENABLE ROW LEVEL SECURITY` vào migration. Thỉnh thoảng nên mở **Security Advisor** của Supabase để kiểm tra.
+- `CRON_SECRET` phải đủ dài và ngẫu nhiên, vì endpoint cron có thể bị gọi từ bên ngoài.

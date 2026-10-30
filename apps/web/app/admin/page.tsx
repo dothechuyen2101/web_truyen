@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { prisma } from "@truyen/db";
-import { getQueues } from "@truyen/crawler/queue";
 import { AdminHeader, AdminSkeleton, Badge, Panel, StatCard, Table, td } from "@/components/admin/ui";
 import { TimeAgo } from "@/components/time-ago";
 import { hoursAgo, requireAdmin } from "@/lib/admin";
@@ -9,21 +8,10 @@ import { formatNumber } from "@/lib/format";
 
 const RUN_STATUS = { SUCCESS: "green", FAILED: "red", RUNNING: "blue" } as const;
 
-async function queueCounts() {
-  const queues = getQueues();
-  const entries = await Promise.all(
-    Object.entries(queues).map(async ([name, q]) => {
-      const c = await q.getJobCounts("waiting", "prioritized", "active", "delayed", "failed");
-      return [name, { waiting: (c.waiting ?? 0) + (c.prioritized ?? 0), active: c.active ?? 0, delayed: c.delayed ?? 0 }] as const;
-    }),
-  );
-  return entries;
-}
-
 async function Dashboard() {
   await requireAdmin("/admin");
   const dayAgo = hoursAgo(24);
-  const [novels, comics, hidden, chapters, contents, users, comments, takedowns, failed24h, sources, runs, queues] =
+  const [novels, comics, hidden, chapters, contents, users, comments, takedowns, failed24h, sources, runs, lastTick] =
     await Promise.all([
       prisma.story.count({ where: { type: "NOVEL" } }),
       prisma.story.count({ where: { type: "COMIC" } }),
@@ -36,8 +24,9 @@ async function Dashboard() {
       prisma.crawlRun.count({ where: { status: "FAILED", startedAt: { gte: dayAgo } } }),
       prisma.source.findMany({ orderBy: { id: "asc" }, include: { _count: { select: { stories: true } } } }),
       prisma.crawlRun.findMany({ orderBy: { startedAt: "desc" }, take: 8, include: { source: { select: { name: true } } } }),
-      queueCounts().catch(() => null),
+      prisma.crawlRun.findFirst({ where: { job: "tick" }, orderBy: { startedAt: "desc" } }),
     ]);
+  const tickStats = lastTick?.stats as Record<string, number> | null;
 
   return (
     <>
@@ -65,6 +54,7 @@ async function Dashboard() {
                   <p className="truncate text-xs text-muted-foreground">
                     {formatNumber(s._count.stories)} truyện · quét lần cuối{" "}
                     {s.lastCrawledAt ? <TimeAgo date={s.lastCrawledAt} /> : "chưa bao giờ"}
+                    {s.backfillPage !== null && ` · backfill tới trang ${s.backfillPage}`}
                   </p>
                 </div>
                 {!s.enabled ? <Badge>Đã tắt</Badge> : s.lastError ? <Badge color="red">Lỗi</Badge> : <Badge color="green">Hoạt động</Badge>}
@@ -72,20 +62,24 @@ async function Dashboard() {
             ))}
           </ul>
         </Panel>
-        <Panel title="Hàng đợi job" description="Số job đang chờ / đang chạy / hẹn giờ trong Redis.">
-          {queues ? (
-            <div className="grid grid-cols-3 gap-3">
-              {queues.map(([name, c]) => (
-                <div key={name} className="rounded-xl bg-muted/50 p-3 text-sm">
-                  <p className="font-medium capitalize">{name}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {c.waiting} chờ · {c.active} chạy · {c.delayed} hẹn
-                  </p>
-                </div>
-              ))}
+        <Panel title="Đợt crawl gần nhất" description="Chạy theo lịch qua /api/cron/crawl (Vercel Cron, cron-job.org) hoặc worker trên VPS.">
+          {lastTick ? (
+            <div className="space-y-2 text-sm">
+              <p className="flex items-center gap-2">
+                <Badge color={RUN_STATUS[lastTick.status]}>{lastTick.status}</Badge>
+                <TimeAgo date={lastTick.startedAt} className="text-muted-foreground" />
+              </p>
+              {tickStats && (
+                <p className="text-muted-foreground">
+                  Quét {tickStats.checked ?? 0} truyện · đồng bộ {tickStats.synced ?? 0} · lỗi {tickStats.failed ?? 0} · backfill{" "}
+                  {tickStats.backfillPages ?? 0} trang · kiểm tra quảng cáo {tickStats.adChecks ?? 0} chương ·{" "}
+                  {Math.round((tickStats.durationMs ?? 0) / 1000)} giây
+                </p>
+              )}
+              {lastTick.error && <p className="text-destructive">{lastTick.error}</p>}
             </div>
           ) : (
-            <p className="text-sm text-destructive">Không kết nối được Redis.</p>
+            <p className="text-sm text-muted-foreground">Chưa có đợt crawl nào — kiểm tra cấu hình cron.</p>
           )}
         </Panel>
       </div>

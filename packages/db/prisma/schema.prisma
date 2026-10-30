@@ -47,6 +47,8 @@ model Source {
   rateLimitMs   Int       @default(500)
   lastCrawledAt DateTime?
   lastError     String?
+  /// Trang "mới cập nhật" kế tiếp cần quét khi đang backfill (null = không backfill)
+  backfillPage  Int?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -372,6 +374,32 @@ model CrawlRun {
 
   @@index([startedAt(sort: Desc)])
   @@index([sourceId, startedAt(sort: Desc)])
+}
+
+/// Truyện bị nguồn chặn (403, vd Cloudflare challenge) hoặc đã xoá (404): tạm bỏ qua tới `until`
+model CrawlSkip {
+  sourceId Int
+  path     String
+  reason   String
+  until    DateTime
+
+  @@id([sourceId, path])
+}
+
+/// Khoá chống chạy chồng (vd hai lần gọi cron cùng lúc); tự hết hạn nếu tiến trình bị ngắt
+model CrawlLock {
+  name        String   @id
+  lockedUntil DateTime
+}
+
+/// Bộ đếm giới hạn tần suất — bảng của Better Auth, dùng chung cho bình luận và yêu cầu gỡ
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rateLimit")
 }
 
 model TakedownRequest {

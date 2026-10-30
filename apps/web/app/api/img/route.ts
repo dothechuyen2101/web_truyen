@@ -55,7 +55,8 @@ export async function GET(request: NextRequest) {
 
   const headers = new Headers({
     "Content-Type": contentType,
-    "Cache-Control": "public, max-age=31536000, immutable",
+    // s-maxage: CDN (Vercel, Cloudflare) cũng cache — Vercel chỉ cache phản hồi function khi có s-maxage.
+    "Cache-Control": "public, max-age=31536000, s-maxage=31536000, immutable",
     "X-Content-Type-Options": "nosniff",
   });
   const length = upstream.headers.get("content-length");

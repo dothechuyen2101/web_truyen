@@ -10,9 +10,7 @@
   },
   "dependencies": {
     "@truyen/crawler": "workspace:*",
-    "@truyen/db": "workspace:*",
-    "bullmq": "^6.5.1",
-    "ioredis": "^5.11.1"
+    "@truyen/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22",

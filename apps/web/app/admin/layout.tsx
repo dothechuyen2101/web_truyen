@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { Toaster } from "@/components/admin/toaster";
 
+// Thao tác crawl bấm tay (Server Action) chạy ngay trong request.
+export const maxDuration = 300;
+
 export const metadata: Metadata = {
   title: { default: "Quản trị", template: "%s | Quản trị" },
   robots: { index: false, follow: false },

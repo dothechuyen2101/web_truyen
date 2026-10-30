@@ -4,9 +4,9 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { refresh, updateTag } from "next/cache";
 import { prisma } from "@truyen/db";
-import { fingerprintImage } from "@truyen/crawler/ads";
+import { discoverLatest, syncTracked, withCrawlRun, withoutSkipped } from "@truyen/crawler";
+import { detectChapterAds, fingerprintImage } from "@truyen/crawler/ads";
 import { mergeStories, splitSource } from "@truyen/crawler/merge";
-import { PRIORITY, enqueue, getQueues } from "@truyen/crawler/queue";
 import { actionError, assertAdmin, type ActionState } from "@/lib/admin";
 import { auth } from "@/lib/auth";
 
@@ -16,6 +16,9 @@ const num = (fd: FormData, key: string) => {
   return value;
 };
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
+
+/** Thao tác crawl bấm tay chạy ngay trong request — dừng nhận truyện mới sau khoảng này */
+const MANUAL_CRAWL_BUDGET_MS = 90_000;
 
 function httpsUrl(value: string, field: string) {
   try {
@@ -65,27 +68,39 @@ export async function updateSource(_: ActionState, fd: FormData) {
 
 export async function crawlSourceNow(_: ActionState, fd: FormData) {
   return run(async () => {
-    await enqueue.discovery({ sourceId: num(fd, "id"), pages: 2 });
-    return "Đã xếp lịch quét trang mới cập nhật";
+    const deadline = Date.now() + MANUAL_CRAWL_BUDGET_MS;
+    const source = await prisma.source.findUniqueOrThrow({ where: { id: num(fd, "id") } });
+    const latest = await withCrawlRun("discovery", { sourceId: source.id }, () => discoverLatest(source, { pages: 1 }));
+    const paths = await withoutSkipped(source.id, latest.toSync);
+    let synced = 0;
+    let failed = 0;
+    for (const path of paths) {
+      if (Date.now() > deadline) break;
+      try {
+        await syncTracked(source, path);
+        synced++;
+      } catch {
+        failed++;
+      }
+    }
+    const left = paths.length - synced - failed;
+    updateTag("stories");
+    return `Đã quét ${latest.checked} truyện, đồng bộ ${synced}${failed ? `, lỗi ${failed}` : ""}${left ? ` — còn ${left} truyện cho đợt cron sau` : ""}`;
   });
 }
 
 export async function startBackfill(_: ActionState, fd: FormData) {
   return run(async () => {
     const fromPage = Math.max(1, Number(fd.get("fromPage")) || 1);
-    await enqueue.discovery({ sourceId: num(fd, "id"), backfill: true, fromPage });
-    return `Đã bắt đầu backfill từ trang ${fromPage}`;
+    await prisma.source.update({ where: { id: num(fd, "id") }, data: { backfillPage: fromPage } });
+    return `Đã bật backfill từ trang ${fromPage} — các đợt cron sẽ chạy dần`;
   });
 }
 
 export async function stopBackfill(_: ActionState, fd: FormData) {
   return run(async () => {
-    const sourceId = num(fd, "id");
-    const { discovery } = getQueues();
-    const jobs = await discovery.getJobs(["waiting", "delayed", "prioritized"]);
-    const targets = jobs.filter((j) => j.data.backfill && j.data.sourceId === sourceId);
-    await Promise.all(targets.map((j) => j.remove()));
-    return targets.length ? `Đã huỷ ${targets.length} đoạn backfill đang chờ` : "Không có backfill nào đang chờ";
+    const source = await prisma.source.update({ where: { id: num(fd, "id") }, data: { backfillPage: null } });
+    return `Đã dừng backfill của ${source.name}`;
   });
 }
 
@@ -93,8 +108,9 @@ export async function syncStoryUrl(_: ActionState, fd: FormData) {
   return run(async () => {
     const source = await prisma.source.findUniqueOrThrow({ where: { id: num(fd, "id") } });
     const url = new URL(str(fd, "url"), source.baseUrl);
-    await enqueue.sync({ sourceId: source.id, path: url.pathname + url.search }, PRIORITY.manual);
-    return `Đã xếp lịch đồng bộ ${url.pathname}`;
+    const result = await syncTracked(source, url.pathname + url.search);
+    updateTag("stories");
+    return `Đã đồng bộ ${url.pathname}: ${result.totalChapters} chương (${result.newChapters} mới)`;
   });
 }
 
@@ -111,9 +127,17 @@ export async function setStoryHidden(_: ActionState, fd: FormData) {
 
 export async function resyncStory(_: ActionState, fd: FormData) {
   return run(async () => {
-    const links = await prisma.storySource.findMany({ where: { storyId: num(fd, "id") } });
-    for (const l of links) await enqueue.sync({ sourceId: l.sourceId, path: l.path }, PRIORITY.manual);
-    return `Đã xếp lịch đồng bộ lại ${links.length} nguồn`;
+    const id = num(fd, "id");
+    const links = await prisma.storySource.findMany({ where: { storyId: id }, include: { source: true } });
+    const errors: string[] = [];
+    for (const l of links) {
+      await syncTracked(l.source, l.path).catch((e: unknown) => errors.push(`${l.source.name}: ${e instanceof Error ? e.message : e}`));
+    }
+    const story = await prisma.story.findUnique({ where: { id }, select: { slug: true } });
+    if (story) invalidateStory(story.slug);
+    updateTag(`chapters-${id}`);
+    if (errors.length) throw new Error(`Đồng bộ lỗi — ${errors.join("; ")}`);
+    return `Đã đồng bộ lại ${links.length} nguồn`;
   });
 }
 
@@ -137,10 +161,11 @@ export async function mergeIntoStory(_: ActionState, fd: FormData) {
 export async function splitStorySource(_: ActionState, fd: FormData) {
   return run(async () => {
     const result = await splitSource(num(fd, "storySourceId"));
-    await enqueue.sync({ sourceId: result.sourceId, path: result.path }, PRIORITY.manual);
+    const source = await prisma.source.findUniqueOrThrow({ where: { id: result.sourceId } });
+    await syncTracked(source, result.path).catch(() => {});
     invalidateStory(result.oldSlug);
     updateTag(`chapters-${num(fd, "id")}`);
-    return `Đã tách thành truyện mới #${result.newStoryId}, đang đồng bộ lại`;
+    return `Đã tách thành truyện mới #${result.newStoryId}`;
   });
 }
 
@@ -262,8 +287,11 @@ export async function markAdImage(_: ActionState, fd: FormData) {
       update: {},
     });
     const chapterId = Number(fd.get("chapterId"));
-    if (Number.isInteger(chapterId)) await enqueue.ads(chapterId, PRIORITY.manual);
-    return "Đã lưu dấu vân tay ảnh quảng cáo";
+    if (Number.isInteger(chapterId)) {
+      await detectChapterAds(chapterId);
+      updateTag(`ads-${chapterId}`);
+    }
+    return "Đã lưu dấu vân tay ảnh quảng cáo và quét lại chương này";
   });
 }
 
@@ -277,13 +305,10 @@ export async function deleteFingerprint(_: ActionState, fd: FormData) {
 export async function rescanAds(_: ActionState, fd: FormData) {
   return run(async () => {
     const days = Math.min(365, Math.max(1, Number(fd.get("days")) || 30));
-    const chapters = await prisma.chapterContent.findMany({
+    const { count } = await prisma.chapterContent.updateMany({
       where: { fetchedAt: { gte: new Date(Date.now() - days * 24 * 3600 * 1000) }, text: null },
-      orderBy: { fetchedAt: "desc" },
-      take: 5000,
-      select: { chapterId: true },
+      data: { adCheckedAt: null },
     });
-    for (const c of chapters) await enqueue.ads(c.chapterId, PRIORITY.backfill);
-    return `Đã xếp lịch quét lại ${chapters.length} chương truyện tranh`;
+    return `Đã đánh dấu ${count} chương truyện tranh để quét lại trong các đợt cron`;
   });
 }

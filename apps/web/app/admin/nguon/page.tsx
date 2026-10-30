@@ -18,7 +18,7 @@ async function Sources() {
     <>
       <AdminHeader
         title="Nguồn crawl"
-        description="Đổi domain khi nguồn chuyển nhà, bật/tắt nguồn, chỉnh tốc độ crawl và chạy crawl thủ công."
+        description="Đổi domain khi nguồn chuyển nhà, bật/tắt nguồn, chỉnh tốc độ crawl và chạy crawl thủ công. Quét/đồng bộ bấm tay chạy ngay (tối đa khoảng 90 giây), phần còn lại để các đợt cron."
       />
       <div className="space-y-6">
         {sources.map((s) => (
@@ -27,6 +27,7 @@ async function Sources() {
               <h2 className="text-lg font-semibold">{s.name}</h2>
               <Badge color="blue">{s.type === "COMIC" ? "Truyện tranh" : "Truyện chữ"}</Badge>
               {s.enabled ? <Badge color="green">Đang bật</Badge> : <Badge>Đã tắt</Badge>}
+              {s.backfillPage !== null && <Badge color="amber">Backfill: trang {s.backfillPage}</Badge>}
               <span className="text-sm text-muted-foreground">
                 · {formatNumber(s._count.stories)} truyện · quét lần cuối{" "}
                 {s.lastCrawledAt ? <TimeAgo date={s.lastCrawledAt} /> : "chưa bao giờ"}
@@ -61,7 +62,7 @@ async function Sources() {
                 <input type="hidden" name="id" value={s.id} />
                 <SubmitButton>Quét mới cập nhật ngay</SubmitButton>
               </ActionForm>
-              <ActionForm action={startBackfill} inline confirm="Backfill sẽ duyệt toàn bộ danh sách của nguồn (có thể mất nhiều giờ). Tiếp tục?">
+              <ActionForm action={startBackfill} inline confirm="Backfill sẽ duyệt dần toàn bộ danh sách của nguồn qua các đợt cron (có thể mất nhiều ngày). Tiếp tục?">
                 <input type="hidden" name="id" value={s.id} />
                 <input name="fromPage" type="number" min={1} defaultValue={1} className={`${inputClass} w-20`} aria-label="Từ trang" />
                 <SubmitButton>Backfill toàn bộ</SubmitButton>

@@ -6,8 +6,9 @@ import type { NextConfig } from "next";
 loadEnvConfig(path.resolve(process.cwd(), "../.."), process.env.NODE_ENV !== "production", undefined, true);
 
 const nextConfig: NextConfig = {
-  // Bản build tự chứa để đóng gói Docker; truy vết file từ gốc monorepo (packages/*).
-  output: "standalone",
+  // Bản build tự chứa để đóng gói Docker (Vercel tự đóng gói nên không cần);
+  // truy vết file từ gốc monorepo (packages/*).
+  output: process.env.VERCEL ? undefined : "standalone",
   outputFileTracingRoot: path.resolve(process.cwd(), "../.."),
   cacheComponents: true,
   partialPrefetching: true,

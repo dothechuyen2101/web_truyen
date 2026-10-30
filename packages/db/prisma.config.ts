@@ -1,4 +1,4 @@
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 // .env dùng chung nằm ở gốc monorepo; khi deploy biến môi trường được set sẵn nên bỏ qua nếu không có file.
 try {
@@ -12,6 +12,7 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: env("DATABASE_URL"),
+    // Migrate cần phiên kết nối ổn định: dùng DIRECT_URL (Supabase: pooler chế độ session) nếu có.
+    url: process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "",
   },
 });

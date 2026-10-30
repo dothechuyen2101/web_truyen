@@ -3,6 +3,7 @@ import { prisma, type Source } from "@truyen/db";
 import { getAdapter } from "./adapters";
 import { toPath } from "./html";
 import { discoverLatest, fetchChapterContent, syncStory, withCrawlRun } from "./sync";
+import { runCrawlTick } from "./tick";
 
 const HELP = `Cách dùng: pnpm crawl <lệnh> [tham số]
 
@@ -11,6 +12,7 @@ const HELP = `Cách dùng: pnpm crawl <lệnh> [tham số]
   latest <source> [--pages N] [--sync]
                               Quét trang "mới cập nhật"; --sync để đồng bộ luôn các truyện tìm được
   preview <url>               Chỉ parse và in kết quả, không ghi DB (truyện hoặc chương)
+  tick [--budget giây]        Chạy một đợt crawl (giống cron): quét mọi nguồn, đồng bộ, backfill
 
   --source <key>              Chỉ định nguồn khi domain trong URL khác baseUrl trong DB`;
 
@@ -20,6 +22,7 @@ const { positionals, values } = parseArgs({
     pages: { type: "string", default: "1" },
     sync: { type: "boolean", default: false },
     source: { type: "string" },
+    budget: { type: "string", default: "120" },
   },
 });
 const [command, arg] = positionals;
@@ -37,6 +40,11 @@ async function findSource(urlOrKey: string): Promise<Source> {
 }
 
 async function main() {
+  if (command === "tick") {
+    console.log(await runCrawlTick({ budgetMs: Number(values.budget) * 1000 }));
+    return;
+  }
+
   if (!command || !arg) {
     console.log(HELP);
     return;
