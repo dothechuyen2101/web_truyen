@@ -18,6 +18,8 @@ const serif = Literata({
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
+  // Mã xác minh Google Search Console (tuỳ chọn): thẻ <meta name="google-site-verification">
+  verification: process.env.GOOGLE_SITE_VERIFICATION ? { google: process.env.GOOGLE_SITE_VERIFICATION } : undefined,
   title: {
     default: `${SITE_NAME} — Đọc truyện chữ, truyện tranh online`,
     template: `%s | ${SITE_NAME}`,

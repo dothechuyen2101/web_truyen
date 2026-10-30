@@ -43,10 +43,11 @@ Việc crawl chạy theo **đợt** (hàm `runCrawlTick`). Mỗi đợt quét tr
 | `IMAGE_PROXY_SECRET` | Chuỗi ngẫu nhiên, tạo bằng `openssl rand -base64 32`. Không đổi sau khi đã chạy. |
 | `BETTER_AUTH_SECRET` | Chuỗi ngẫu nhiên. Đổi giá trị này sẽ đăng xuất mọi người. |
 | `CRON_SECRET` | Chuỗi ngẫu nhiên, dùng để bảo vệ endpoint cron |
-| `NEXT_PUBLIC_SITE_URL`, `BETTER_AUTH_URL` | `https://<tên-project>.vercel.app`, hoặc tên miền riêng |
+| `NEXT_PUBLIC_SITE_URL`, `BETTER_AUTH_URL` | `https://<tên-project>.vercel.app`, hoặc tên miền riêng. Để trống (hoặc lỡ để localhost) thì tự dùng tên miền production của Vercel. |
 | `NEXT_PUBLIC_SITE_NAME` | Tên site, vd `Kho Truyện` |
 | `ENABLE_EXPERIMENTAL_COREPACK` | `1`. Để Vercel dùng đúng pnpm 12 ghi trong `package.json`. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Tuỳ chọn |
+| `GOOGLE_SITE_VERIFICATION` | Tuỳ chọn: mã xác minh Google Search Console (phương thức "Thẻ HTML") |
 
 5. Bấm **Deploy**. Lúc build, Next.js đọc CSDL để prerender trang chủ và sitemap, nên phải chạy `pnpm db:deploy` (phần Chuẩn bị Supabase) trước.
 6. Vào **Quản trị → Nguồn crawl**, tắt **NetTruyen** và **TruyenQQ**: hai nguồn này chặn IP máy chủ Vercel (403), truyện tranh sẽ lấy từ MangaDex.

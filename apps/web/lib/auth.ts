@@ -5,12 +5,13 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { admin } from "better-auth/plugins";
 import { prisma } from "@truyen/db";
-import { SITE_NAME } from "./site";
+import { publicUrl, SITE_NAME } from "./site";
 
 export const googleEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
 export const auth = betterAuth({
   appName: SITE_NAME,
+  baseURL: publicUrl(process.env.BETTER_AUTH_URL),
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   emailAndPassword: { enabled: true, minPasswordLength: 8, autoSignIn: true },
   socialProviders: googleEnabled
@@ -21,8 +22,8 @@ export const auth = betterAuth({
         },
       }
     : undefined,
-  // Bản preview của Vercel có URL riêng (khác BETTER_AUTH_URL) — vẫn cho đăng nhập.
-  trustedOrigins: [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL]
+  // Tên miền production và bản preview của Vercel (URL riêng, khác BETTER_AUTH_URL) — vẫn cho đăng nhập.
+  trustedOrigins: [process.env.VERCEL_PROJECT_PRODUCTION_URL, process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL]
     .filter(Boolean)
     .map((host) => `https://${host}`),
   session: { cookieCache: { enabled: true, maxAge: 5 * 60 } },
