@@ -57,13 +57,13 @@ export interface ListParams {
 }
 
 /**
- * Truyện hiển thị công khai: không bị ẩn, có chương, và còn ít nhất một nguồn đang bật
+ * Truyện hiển thị công khai: không bị ẩn, có chương, và còn ít nhất một nguồn đang bật có chương
  * (nguồn bị tắt — vd chặn IP máy chủ — thì chương chưa tải không đọc được nữa).
  */
 export const READABLE_STORY = {
   hidden: false,
   chapterCount: { gt: 0 },
-  sources: { some: { source: { enabled: true } } },
+  sources: { some: { source: { enabled: true }, chapterCount: { gt: 0 } } },
 } satisfies Prisma.StoryWhereInput;
 
 export async function listStories(params: ListParams) {
@@ -145,7 +145,9 @@ export async function getStory(slug: string) {
     include: {
       author: { select: { name: true, slug: true } },
       genres: { select: { genre: { select: { name: true, slug: true } } } },
-      sources: { select: { path: true, source: { select: { key: true, name: true, baseUrl: true, enabled: true } } } },
+      sources: {
+        select: { path: true, chapterCount: true, source: { select: { key: true, name: true, baseUrl: true, enabled: true } } },
+      },
     },
   });
   if (!story || story.hidden) {
@@ -166,7 +168,7 @@ export async function getStory(slug: string) {
     genres: genres.map((g) => g.genre),
     sources: sources.map((s) => ({ name: s.source.name, url: sourceWebUrl(s.source, s.path) })),
     /** Còn nguồn đang bật — không thì chỉ đọc được các chương đã tải trước đó */
-    readable: sources.some((s) => s.source.enabled),
+    readable: sources.some((s) => s.source.enabled && s.chapterCount > 0),
     firstChapter: first?.number ?? null,
     lastChapter: last ?? null,
     rating: story.ratingCount ? story.ratingSum / story.ratingCount : null,
