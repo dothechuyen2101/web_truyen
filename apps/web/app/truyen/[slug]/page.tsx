@@ -21,20 +21,19 @@ import {
   stripHtml,
   TYPE_LABEL,
 } from "@/lib/format";
+import { breadcrumbJsonLd, JsonLd, storySeo, typeCrumb } from "@/lib/seo";
 import { SITE_URL } from "@/lib/site";
 
 export async function generateMetadata({ params }: PageProps<"/truyen/[slug]">): Promise<Metadata> {
   const { slug } = await params;
   const story = await getStory(slug);
   if (!story) return { title: "Không tìm thấy truyện" };
-  const description =
-    stripHtml(story.description).slice(0, 160) ||
-    `Đọc ${TYPE_LABEL[story.type].toLowerCase()} ${story.title} online, cập nhật chương mới nhất.`;
+  const { title, description } = storySeo(story);
   return {
-    title: `${story.title} [${TYPE_LABEL[story.type]}]`,
+    title,
     description,
     alternates: { canonical: `/truyen/${slug}` },
-    openGraph: { title: story.title, description, images: story.cover ? [story.cover] : undefined },
+    openGraph: { title, description, url: `/truyen/${slug}`, images: story.cover ? [story.cover] : undefined },
   };
 }
 
@@ -229,6 +228,7 @@ function StoryJsonLd({ story }: { story: StoryDetail }) {
     "@context": "https://schema.org",
     "@type": story.type === "COMIC" ? "ComicSeries" : "Book",
     name: story.title,
+    alternateName: story.altTitles.length ? story.altTitles : undefined,
     url: `${SITE_URL}/truyen/${story.slug}`,
     image: story.cover ? `${SITE_URL}${story.cover}` : undefined,
     author: story.author ? { "@type": "Person", name: story.author.name } : undefined,
@@ -236,11 +236,16 @@ function StoryJsonLd({ story }: { story: StoryDetail }) {
     description: stripHtml(story.description).slice(0, 500) || undefined,
     inLanguage: "vi",
   };
+  const crumbs = breadcrumbJsonLd([
+    { name: "Trang chủ", path: "/" },
+    typeCrumb(story.type),
+    { name: story.title, path: `/truyen/${story.slug}` },
+  ]);
   return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data).replace(/</g, "\\u003c") }}
-    />
+    <>
+      <JsonLd data={data} />
+      <JsonLd data={crumbs} />
+    </>
   );
 }
 

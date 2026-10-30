@@ -8,6 +8,7 @@ import { rateStory, toggleFollow } from "@/lib/actions";
 import { useSession } from "@/lib/auth-client";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { PushToggle } from "./push-toggle";
 import { loginHref } from "./user-menu";
 
 interface Props {
@@ -109,6 +110,7 @@ export function StoryInteractions({ storyId, followCount, rating, ratingCount }:
         {following ? "Đang theo dõi" : "Theo dõi"}
         <span className="text-muted-foreground tabular-nums">· {formatNumber(follows)}</span>
       </Button>
+      {following && <PushToggle compact />}
 
       <div className="flex items-center gap-2">
         <div className="flex" onMouseLeave={() => setHover(null)} role="radiogroup" aria-label="Chấm điểm truyện">

@@ -6,13 +6,14 @@ import { PageTitle } from "@/components/section";
 import { StoryGridSkeleton } from "@/components/story-card";
 import { StoryListing } from "@/components/story-listing";
 import { getGenre } from "@/lib/data";
+import { SITE_NAME } from "@/lib/site";
 
 export async function generateMetadata({ params }: PageProps<"/the-loai/[slug]">): Promise<Metadata> {
   const genre = await getGenre((await params).slug);
   if (!genre) return { title: "Không tìm thấy thể loại" };
   return {
-    title: `Truyện ${genre.name}`,
-    description: `Danh sách truyện thể loại ${genre.name} hay, cập nhật mới nhất.`,
+    title: `Truyện ${genre.name} Hay - Đọc Truyện ${genre.name} Online`,
+    description: `Danh sách truyện ${genre.name} hay, cập nhật chương mới mỗi ngày. Đọc truyện ${genre.name} online miễn phí tại ${SITE_NAME}.`,
     alternates: { canonical: `/the-loai/${genre.slug}` },
   };
 }

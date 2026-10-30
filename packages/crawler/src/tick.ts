@@ -1,5 +1,6 @@
 import { prisma, type Source } from "@truyen/db";
 import { detectChapterAds } from "./ads";
+import { notifyNewChapters } from "./notify";
 import { discoverLatest, syncTracked, withCrawlRun, withoutSkipped } from "./sync";
 
 export interface TickOptions {
@@ -18,6 +19,8 @@ export interface TickStats {
   failed: number;
   backfillPages: number;
   adChecks: number;
+  /** Thông báo đẩy chương mới đã gửi */
+  pushSent: number;
   durationMs: number;
 }
 
@@ -91,6 +94,7 @@ export async function runCrawlTick({
         failed: 0,
         backfillPages: 0,
         adChecks: 0,
+        pushSent: 0,
         durationMs: 0,
       };
 
@@ -149,6 +153,10 @@ export async function runCrawlTick({
       const sources = await prisma.source.findMany({ where: { enabled: true } });
       stats.sources = sources.length;
       await Promise.all(sources.map(crawlSource));
+
+      // Báo chương mới cho người theo dõi (Web Push); lỗi gửi không làm hỏng cả đợt.
+      const pushed = await notifyNewChapters({ deadline }).catch(() => null);
+      stats.pushSent = pushed?.sent ?? 0;
 
       // Nhận diện ảnh quảng cáo cho các chương truyện tranh chưa kiểm tra (chỉ khi đã có mẫu).
       if (await prisma.adFingerprint.count()) {

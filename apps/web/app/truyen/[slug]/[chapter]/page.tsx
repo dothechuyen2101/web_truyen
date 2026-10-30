@@ -21,6 +21,7 @@ import {
   type ChapterCredit,
 } from "@/lib/data";
 import { chapterHref, formatChapterNumber, parseChapterParam } from "@/lib/format";
+import { breadcrumbJsonLd, chapterSeo, JsonLd, typeCrumb } from "@/lib/seo";
 import { HOUSE_ADS_ENABLED } from "@/lib/site";
 
 type Props = PageProps<"/truyen/[slug]/[chapter]">;
@@ -39,11 +40,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = await load(params);
   if (!data) return { title: "Không tìm thấy chương" };
   const { story, chapter } = data;
-  const name = `Chương ${formatChapterNumber(chapter.number)}${chapter.title ? `: ${chapter.title}` : ""}`;
+  const { title, description } = chapterSeo(story, chapter);
+  const url = chapterHref(story.slug, chapter.number);
   return {
-    title: `${story.title} - ${name}`,
-    description: `Đọc ${story.title} ${name} mới nhất.`,
-    alternates: { canonical: chapterHref(story.slug, chapter.number) },
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: { title, description, url, type: "article", images: story.cover ? [story.cover] : undefined },
   };
 }
 
@@ -138,6 +141,8 @@ async function ChapterView({ params }: Pick<Props, "params">) {
           {story.title}
         </Link>
         <h1 className="mt-2 text-2xl font-bold tracking-tight text-balance sm:text-3xl">
+          {/* Tên truyện trong h1 cho công cụ tìm kiếm/trình đọc màn hình; đã hiện ở link phía trên */}
+          <span className="sr-only">{story.title} – </span>
           Chương {formatChapterNumber(chapter.number)}
         </h1>
         {chapter.title && <p className="mt-1 text-muted-foreground">{chapter.title}</p>}
@@ -153,7 +158,7 @@ async function ChapterView({ params }: Pick<Props, "params">) {
           }
         >
           <Reveal>
-            <ChapterBody chapterId={chapter.id} title={story.title} />
+            <ChapterBody chapterId={chapter.id} title={`${story.title} chương ${formatChapterNumber(chapter.number)}`} />
           </Reveal>
         </Suspense>
       </ContentErrorBoundary>
@@ -161,6 +166,14 @@ async function ChapterView({ params }: Pick<Props, "params">) {
       <div className="mt-12">
         <CommentSection storyId={story.id} chapterId={chapter.id} />
       </div>
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: "Trang chủ", path: "/" },
+          typeCrumb(story.type),
+          { name: story.title, path: `/truyen/${story.slug}` },
+          { name: `Chương ${formatChapterNumber(chapter.number)}`, path: chapterHref(story.slug, chapter.number) },
+        ])}
+      />
       <ReaderTracker
         storyId={story.id}
         chapterId={chapter.id}

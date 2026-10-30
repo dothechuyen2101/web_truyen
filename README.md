@@ -60,6 +60,12 @@ pnpm crawl preview <url>                                    # chỉ parse, khôn
 - **MangaDex**: điều kiện dùng API là ghi công MangaDex và nhóm dịch (hiện ở trình đọc, trang truyện, footer), gỡ truyện khi nhóm dịch yêu cầu, và **không chạy quảng cáo/dịch vụ thu phí** trên site. Ảnh lấy từ máy chủ gốc `uploads.mangadex.org` (chất lượng data-saver) qua proxy, User-Agent thật, giãn cách 250ms (giới hạn ~5 request/giây). Chỉ lấy truyện loại an toàn/gợi cảm. Backfill (Quản trị → Nguồn crawl) duyệt toàn bộ kho tiếng Việt, manhua/manhwa trước.
 - **ManhuaVN** (manhuavn2.com): phần lớn chương mới chỉ có trên app của nguồn, web thường chỉ mở vài chương đầu. Adapter dò ranh giới chương mở (vài request mỗi truyện) và chỉ đưa lên chương đọc được; chương khoá vẫn tính vào số chương mới nhất (`ChapterRef.unavailable`) để không đồng bộ lại liên tục. Không đọc `/ajax/`, `/api/` (robots.txt cấm).
 
+## Người đọc
+
+- **Thông báo chương mới** (Web Push): người đăng nhập bật ở Tủ truyện hoặc ngay dưới nút Theo dõi. Mỗi đợt crawl gửi thông báo cho người theo dõi các truyện có chương mới (`packages/crawler/src/notify.ts`). Cần khoá VAPID; iPhone phải "Thêm vào Màn hình chính" trước.
+- **PWA**: `app/manifest.ts` + `public/sw.js` (service worker chỉ xử lý thông báo, không cache nội dung).
+- **SEO**: `/sitemap-index.xml` gồm sitemap trang truyện và từng chương; tiêu đề/mô tả theo cách người đọc tìm ("tên truyện chap N"), breadcrumb và JSON-LD (`lib/seo.tsx`).
+
 ## Thêm nguồn mới
 
 1. Tạo adapter trong `packages/crawler/src/adapters/` theo interface `SourceAdapter`. Tách hàm parse thuần để test được.

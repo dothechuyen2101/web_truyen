@@ -163,7 +163,7 @@ model Chapter {
 }
 
 model ChapterSource {
-  id            Int    @id @default(autoincrement())
+  id            Int     @id @default(autoincrement())
   chapterId     Int
   storySourceId Int
   /// Đường dẫn tương đối với Source.baseUrl
@@ -210,12 +210,13 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  sessions  Session[]
-  accounts  Account[]
-  follows   Follow[]
-  histories ReadingHistory[]
-  comments  Comment[]
-  ratings   Rating[]
+  sessions          Session[]
+  accounts          Account[]
+  follows           Follow[]
+  histories         ReadingHistory[]
+  pushSubscriptions WebPushSubscription[]
+  comments          Comment[]
+  ratings           Rating[]
 
   @@map("user")
 }
@@ -271,6 +272,20 @@ model Verification {
 }
 
 // ---------- Tương tác ----------
+
+/// Trình duyệt đăng ký nhận thông báo đẩy (Web Push) — báo chương mới của truyện đang theo dõi.
+model WebPushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
 
 model Follow {
   userId    String

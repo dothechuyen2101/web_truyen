@@ -6,8 +6,8 @@ import { StoryGridSkeleton } from "@/components/story-card";
 import { StoryListing } from "@/components/story-listing";
 
 export const metadata: Metadata = {
-  title: "Truyện chữ",
-  description: "Tiểu thuyết, ngôn tình, tiên hiệp, kiếm hiệp… cập nhật chương mới mỗi ngày.",
+  title: "Truyện Chữ Online - Ngôn Tình, Tiên Hiệp, Kiếm Hiệp",
+  description: "Đọc truyện chữ online miễn phí: ngôn tình, tiên hiệp, kiếm hiệp, đô thị, xuyên không… cập nhật chương mới mỗi ngày.",
   alternates: { canonical: "/truyen-chu" },
 };
 

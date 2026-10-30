@@ -48,6 +48,7 @@ Việc crawl chạy theo **đợt** (hàm `runCrawlTick`). Mỗi đợt quét tr
 | `ENABLE_EXPERIMENTAL_COREPACK` | `1`. Để Vercel dùng đúng pnpm 12 ghi trong `package.json`. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Tuỳ chọn |
 | `GOOGLE_SITE_VERIFICATION` | Tuỳ chọn: mã xác minh Google Search Console (phương thức "Thẻ HTML") |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Thông báo chương mới (Web Push). Tạo bằng `npx web-push generate-vapid-keys`; `VAPID_SUBJECT` là URL site. Để trống thì tắt tính năng. Biến `NEXT_PUBLIC_*` được nhúng lúc build → thêm xong phải Redeploy. |
 
 5. Bấm **Deploy**. Lúc build, Next.js đọc CSDL để prerender trang chủ và sitemap, nên phải chạy `pnpm db:deploy` (phần Chuẩn bị Supabase) trước.
 6. Vào **Quản trị → Nguồn crawl**, tắt **NetTruyen** và **TruyenQQ**: hai nguồn này chặn IP máy chủ Vercel (403), truyện tranh sẽ lấy từ MangaDex.
@@ -64,6 +65,11 @@ Nếu sau này đổi tên miền, nhớ sửa `NEXT_PUBLIC_SITE_URL` và `BETTE
   Endpoint trả lời ngay (202) rồi chạy nền, nên cron-job.org không phải chờ.
 
 Mỗi đợt mặc định chạy 120 giây (biến `CRAWL_TICK_SECONDS`). Kết quả từng đợt xem ở **Quản trị → Tổng quan → Đợt crawl gần nhất**.
+
+### SEO
+
+- Sitemap tổng: `/sitemap-index.xml` (trang chính, trang truyện, từng chương — sitemap chương cập nhật mỗi giờ). Gửi URL này trong Google Search Console → Sơ đồ trang web.
+- Xác minh Search Console bằng phương thức "Thẻ HTML": dán mã vào `GOOGLE_SITE_VERIFICATION` rồi Redeploy.
 
 ### 3. Tài khoản quản trị
 

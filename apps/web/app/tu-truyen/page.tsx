@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PageTransition } from "@/components/motion";
+import { PushToggle } from "@/components/push-toggle";
 import { PageTitle } from "@/components/section";
 import { ReadingHistory } from "./reading-history";
 
@@ -16,6 +17,9 @@ export default function BookshelfPage() {
           title="Tủ truyện"
           description="Lịch sử đọc và truyện bạn theo dõi. Đăng nhập để đồng bộ trên mọi thiết bị."
         />
+        <div className="mb-8">
+          <PushToggle />
+        </div>
         <ReadingHistory />
       </div>
     </PageTransition>

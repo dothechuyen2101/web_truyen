@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Be_Vietnam_Pro, Literata } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
+import { ServiceWorkerRegister } from "@/components/service-worker";
 import { SiteHeader } from "@/components/site-header";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
@@ -26,6 +27,8 @@ export const metadata: Metadata = {
   },
   description: SITE_DESCRIPTION,
   openGraph: { siteName: SITE_NAME, locale: "vi_VN", type: "website" },
+  // Cài như app trên iPhone (Thêm vào Màn hình chính) — cần cho thông báo đẩy trên iOS.
+  appleWebApp: { capable: true, title: SITE_NAME, statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
@@ -52,6 +55,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <SiteHeader />
         <main className="flex-1 overflow-x-clip">{children}</main>
         <SiteFooter />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
