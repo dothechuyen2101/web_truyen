@@ -1,0 +1,22 @@
+{
+  "name": "@truyen/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "start": "tsx --env-file-if-exists=../../.env src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@truyen/crawler": "workspace:*",
+    "@truyen/db": "workspace:*",
+    "bullmq": "^6.5.1",
+    "ioredis": "^5.11.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}

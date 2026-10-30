@@ -1,0 +1,94 @@
+# Chạy production trên một VPS. Xem DEPLOY.md để biết các bước.
+#   docker compose -f docker-compose.prod.yml up -d postgres redis
+#   docker compose -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.prod.yml run --rm worker pnpm db:deploy
+#   docker compose -f docker-compose.prod.yml up -d
+# Thêm --profile caddy để Caddy tự lấy chứng chỉ HTTPS cho SITE_DOMAIN.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-truyen}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Đặt POSTGRES_PASSWORD trong .env}
+      POSTGRES_DB: ${POSTGRES_DB:-truyen}
+    # Chỉ mở cho máy chủ (build Next cần kết nối, sao lưu bằng pg_dump)
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-truyen}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      target: web
+      network: host
+      args:
+        BUILD_DATABASE_URL: ${BUILD_DATABASE_URL:?Đặt BUILD_DATABASE_URL trong .env}
+      secrets:
+        - dotenv
+    env_file: .env
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  worker:
+    build:
+      context: .
+      target: worker
+    env_file: .env
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["caddy"]
+    restart: unless-stopped
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+secrets:
+  dotenv:
+    file: .env
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:

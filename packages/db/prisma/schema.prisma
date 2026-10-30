@@ -1,0 +1,386 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum StoryType {
+  NOVEL
+  COMIC
+}
+
+enum StoryStatus {
+  ONGOING
+  COMPLETED
+  UNKNOWN
+}
+
+enum CrawlStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum TakedownStatus {
+  PENDING
+  RESOLVED
+  REJECTED
+}
+
+// ---------- Nguồn crawl ----------
+
+model Source {
+  id            Int       @id @default(autoincrement())
+  /// Khớp với SourceAdapter.key trong @truyen/crawler
+  key           String    @unique
+  name          String
+  type          StoryType
+  /// Domain hiện tại của nguồn — sửa được trong admin khi nguồn đổi domain
+  baseUrl       String
+  enabled       Boolean   @default(true)
+  /// Cao hơn = ưu tiên khi lấy nội dung chương
+  priority      Int       @default(0)
+  /// Khoảng cách tối thiểu giữa 2 request tới nguồn (ms)
+  rateLimitMs   Int       @default(500)
+  lastCrawledAt DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  stories   StorySource[]
+  crawlRuns CrawlRun[]
+}
+
+// ---------- Nội dung ----------
+
+model Author {
+  id      Int     @id @default(autoincrement())
+  name    String
+  slug    String  @unique
+  stories Story[]
+}
+
+model Genre {
+  id      Int          @id @default(autoincrement())
+  name    String
+  slug    String       @unique
+  stories StoryGenre[]
+}
+
+model Story {
+  id              Int         @id @default(autoincrement())
+  slug            String      @unique
+  title           String
+  altTitles       String[]
+  type            StoryType
+  status          StoryStatus @default(UNKNOWN)
+  description     String?
+  /// URL ảnh bìa gốc; hiển thị qua /api/img
+  coverUrl        String?
+  authorId        Int?
+  /// Tiêu đề + tác giả không dấu, dùng cho tìm kiếm trigram
+  searchText      String      @default("")
+  /// Tiêu đề chuẩn hoá, dùng để ghép cùng một truyện giữa các nguồn
+  matchKey        String
+  chapterCount    Int         @default(0)
+  latestChapterAt DateTime?
+  viewCount       Int         @default(0)
+  followCount     Int         @default(0)
+  ratingSum       Int         @default(0)
+  ratingCount     Int         @default(0)
+  hidden          Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  author    Author?          @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  genres    StoryGenre[]
+  sources   StorySource[]
+  chapters  Chapter[]
+  follows   Follow[]
+  histories ReadingHistory[]
+  comments  Comment[]
+  ratings   Rating[]
+
+  @@index([type, hidden, latestChapterAt(sort: Desc)])
+  @@index([type, hidden, viewCount(sort: Desc)])
+  @@index([matchKey, type])
+  @@index([authorId])
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+model StoryGenre {
+  storyId Int
+  genreId Int
+  story   Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  genre   Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([storyId, genreId])
+  @@index([genreId])
+}
+
+/// Một truyện trên một nguồn. Một Story có thể có nhiều StorySource (nguồn dự phòng).
+model StorySource {
+  id                  Int       @id @default(autoincrement())
+  storyId             Int
+  sourceId            Int
+  /// Đường dẫn tương đối với Source.baseUrl, vd "/truyen-tranh/gay-go-cap-99"
+  path                String
+  priority            Int       @default(0)
+  chapterCount        Int       @default(0)
+  /// Số chương lớn nhất đã biết trên nguồn này — so với trang danh sách để biết có chương mới
+  latestChapterNumber Float?
+  lastSyncedAt        DateTime?
+  lastError           String?
+  createdAt           DateTime  @default(now())
+
+  story    Story           @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  source   Source          @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  chapters ChapterSource[]
+
+  @@unique([sourceId, path])
+  @@index([storyId])
+}
+
+model Chapter {
+  id        Int      @id @default(autoincrement())
+  storyId   Int
+  /// Số chương lấy từ URL nguồn, có thể lẻ (136.5). Dùng cho URL và ghép chương giữa các nguồn.
+  number    Float
+  title     String?
+  createdAt DateTime @default(now())
+
+  story    Story           @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  sources  ChapterSource[]
+  content  ChapterContent?
+  comments Comment[]
+
+  @@unique([storyId, number])
+}
+
+model ChapterSource {
+  id            Int    @id @default(autoincrement())
+  chapterId     Int
+  storySourceId Int
+  /// Đường dẫn tương đối với Source.baseUrl
+  path          String
+
+  chapter     Chapter     @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  storySource StorySource @relation(fields: [storySourceId], references: [id], onDelete: Cascade)
+
+  @@unique([storySourceId, path])
+  @@index([chapterId])
+}
+
+/// Nội dung chương, chỉ có sau khi được đọc lần đầu (hoặc tải trước).
+model ChapterContent {
+  chapterId   Int       @id
+  sourceId    Int
+  /// Truyện chữ: HTML đã làm sạch
+  text        String?
+  /// Truyện tranh: mảng URL ảnh gốc (string[])
+  images      Json?
+  /// Vị trí các ảnh bị nhận diện là quảng cáo do nguồn chèn vào (so khớp AdFingerprint)
+  adIndexes   Int[]     @default([])
+  adCheckedAt DateTime?
+  fetchedAt   DateTime  @default(now())
+
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+}
+
+// ---------- Người dùng (bảng của Better Auth, kèm trường của plugin admin) ----------
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  /// "admin" | "user" (plugin admin)
+  role          String?   @default("user")
+  banned        Boolean?  @default(false)
+  banReason     String?
+  banExpires    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions  Session[]
+  accounts  Account[]
+  follows   Follow[]
+  histories ReadingHistory[]
+  comments  Comment[]
+  ratings   Rating[]
+
+  @@map("user")
+}
+
+model Session {
+  id             String   @id
+  expiresAt      DateTime
+  token          String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  impersonatedBy String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ---------- Tương tác ----------
+
+model Follow {
+  userId    String
+  storyId   Int
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, storyId])
+  @@index([storyId])
+}
+
+/// Chương đang đọc dở của người dùng đã đăng nhập (người chưa đăng nhập lưu ở localStorage)
+model ReadingHistory {
+  userId        String
+  storyId       Int
+  chapterNumber Float
+  updatedAt     DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, storyId])
+  @@index([userId, updatedAt(sort: Desc)])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  storyId   Int
+  /// null = bình luận cho cả truyện
+  chapterId Int?
+  parentId  Int?
+  content   String
+  hidden    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  story   Story     @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  chapter Chapter?  @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("CommentReplies")
+
+  @@index([storyId, createdAt(sort: Desc)])
+  @@index([parentId])
+  @@index([userId])
+}
+
+model Rating {
+  userId    String
+  storyId   Int
+  /// 1–5 sao
+  score     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, storyId])
+  @@index([storyId])
+}
+
+// ---------- Quảng cáo ----------
+
+/// Dấu vân tay (dHash 64-bit, hex) của ảnh quảng cáo mà nguồn chèn vào chương truyện tranh
+model AdFingerprint {
+  id        Int      @id @default(autoincrement())
+  hash      String   @unique
+  label     String?
+  /// URL ảnh gốc dùng để tạo dấu vân tay (để admin xem lại)
+  sampleUrl String
+  createdAt DateTime @default(now())
+}
+
+/// Quảng cáo của site, hiển thị thay cho ảnh quảng cáo của nguồn
+model HouseAd {
+  id        Int      @id @default(autoincrement())
+  name      String
+  imageUrl  String
+  linkUrl   String?
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// ---------- Vận hành ----------
+
+model CrawlRun {
+  id         Int         @id @default(autoincrement())
+  sourceId   Int?
+  /// discovery | syncStory | backfill | prefetch
+  job        String
+  target     String?
+  status     CrawlStatus @default(RUNNING)
+  stats      Json?
+  error      String?
+  startedAt  DateTime    @default(now())
+  finishedAt DateTime?
+
+  source Source? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([startedAt(sort: Desc)])
+  @@index([sourceId, startedAt(sort: Desc)])
+}
+
+model TakedownRequest {
+  id         Int            @id @default(autoincrement())
+  name       String
+  email      String
+  urls       String
+  message    String
+  status     TakedownStatus @default(PENDING)
+  createdAt  DateTime       @default(now())
+  resolvedAt DateTime?
+}

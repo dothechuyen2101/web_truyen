@@ -1,0 +1,29 @@
+{
+  "name": "web-truyen",
+  "private": true,
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @truyen/web --filter @truyen/worker dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "format": "prettier --write .",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter @truyen/db generate",
+    "db:migrate": "pnpm --filter @truyen/db migrate",
+    "db:seed": "pnpm --filter @truyen/db seed",
+    "db:studio": "pnpm --filter @truyen/db studio",
+    "crawl": "pnpm --filter @truyen/crawler cli",
+    "make-admin": "pnpm --filter @truyen/db make-admin",
+    "db:deploy": "pnpm --filter @truyen/db migrate:deploy"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
+  }
+}
