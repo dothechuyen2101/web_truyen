@@ -15,6 +15,8 @@ const SWIPE_PX = 50;
 export function FeaturedCarousel({ items }: { items: FeaturedStory[] }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  // Bìa tải lỗi (nguồn chặn/chập chờn) → ẩn hẳn thay vì hiện ảnh vỡ.
+  const [brokenCovers, setBrokenCovers] = useState<ReadonlySet<number>>(new Set());
   const startX = useRef<number | null>(null);
   const count = items.length;
 
@@ -27,6 +29,8 @@ export function FeaturedCarousel({ items }: { items: FeaturedStory[] }) {
   if (!count) return null;
   const go = (delta: number) => setIndex((i) => (i + delta + count) % count);
   const story = items[index]!;
+  const coverOf = (s: FeaturedStory) => (brokenCovers.has(s.id) ? null : s.cover);
+  const markBroken = (id: number) => setBrokenCovers((prev) => new Set(prev).add(id));
 
   return (
     <section
@@ -53,9 +57,9 @@ export function FeaturedCarousel({ items }: { items: FeaturedStory[] }) {
             i === index ? "opacity-100" : "opacity-0",
           )}
         >
-          {s.cover && (
+          {coverOf(s) && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={s.cover} alt="" className="size-full scale-125 object-cover opacity-50 blur-3xl saturate-150 dark:opacity-40" />
+            <img src={coverOf(s)!} alt="" onError={() => markBroken(s.id)} className="size-full scale-125 object-cover opacity-50 blur-3xl saturate-150 dark:opacity-40" />
           )}
         </div>
       ))}
@@ -111,7 +115,7 @@ export function FeaturedCarousel({ items }: { items: FeaturedStory[] }) {
             </div>
           )}
         </div>
-        {story.cover && (
+        {coverOf(story) && (
           <Link
             key={`cover-${story.id}`}
             href={`/truyen/${story.slug}`}
@@ -119,8 +123,9 @@ export function FeaturedCarousel({ items }: { items: FeaturedStory[] }) {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={story.cover}
+              src={coverOf(story)!}
               alt={story.title}
+              onError={() => markBroken(story.id)}
               className="aspect-[3/4] w-full rotate-2 rounded-2xl object-cover shadow-2xl ring-1 ring-white/20 transition-transform duration-500 hover:rotate-0 hover:scale-[1.03]"
             />
           </Link>
