@@ -8,6 +8,7 @@ import {
   parseManhuavnList,
   parseManhuavnStory,
 } from "../src/adapters/manhuavn";
+import { getAdapter, isAllowedImageHost } from "../src/adapters";
 import { fixture } from "./helpers";
 
 const BASE = "https://manhuavn2.com";
@@ -69,6 +70,20 @@ describe("manhuavn", () => {
     expect(content.kind === "images" && content.urls.length).toBe(237);
     expect(content.kind === "images" && content.urls[0]).toMatch(/^https:\/\/img06\.g5img\.top\//);
     expect(() => parseManhuavnChapter(fixture("manhuavn/locked.html"), "/c")).toThrow(/chỉ có trên app/);
+  });
+
+  it("proxy ảnh cho phép mọi host ảnh nguồn dùng", () => {
+    const adapter = getAdapter({ key: "manhuavn", baseUrl: BASE });
+    for (const url of [
+      "https://admin.manhuavn2.com/Pictures/Truyen/Large/x.jpg",
+      "https://img06.g5img.top/bbdata/a/1.jpg",
+      "https://img2.truyensieuhay.com/bbdata/a/0.jpg",
+      "https://1.bp.blogspot.com/-a/b/s0/0.jpg",
+      "https://blogger.googleusercontent.com/img/b/a/s0/1.jpg",
+    ]) {
+      expect(isAllowedImageHost(adapter, url), url).toBe(true);
+    }
+    expect(isAllowedImageHost(adapter, "https://evil.example.com/x.jpg")).toBe(false);
   });
 
   it("dò số chương mở bằng ít request (mốc 5 chương, rồi tìm nhị phân)", async () => {

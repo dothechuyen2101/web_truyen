@@ -161,7 +161,8 @@ export async function countFreePrefix(count: number, isFree: (index: number) => 
 export class ManhuavnAdapter extends BaseAdapter {
   readonly key = "manhuavn";
   readonly type = "COMIC" as const;
-  readonly imageHosts = ["g5img.top"];
+  // Ảnh chương nằm rải rác trên nhiều host (CDN riêng, host cũ, Blogger); ảnh bìa ở admin.<domain nguồn>.
+  readonly imageHosts = ["g5img.top", "truyensieuhay.com", "bp.blogspot.com", "blogger.googleusercontent.com"];
 
   async listLatest(page: number): Promise<StoryListPage> {
     const html = await this.fetchHtml(`/danhsach/P${Math.max(1, page)}/index.html?status=0&sort=2`);
