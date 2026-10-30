@@ -23,9 +23,14 @@ export const auth = betterAuth({
       }
     : undefined,
   // Tên miền production và bản preview của Vercel (URL riêng, khác BETTER_AUTH_URL) — vẫn cho đăng nhập.
-  trustedOrigins: [process.env.VERCEL_PROJECT_PRODUCTION_URL, process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL]
-    .filter(Boolean)
-    .map((host) => `https://${host}`),
+  // Kèm chính origin của request (cùng tên miền với site): đăng nhập vẫn chạy khi BETTER_AUTH_URL cấu hình sai;
+  // request giả mạo từ trang khác mang Origin khác nên vẫn bị chặn.
+  trustedOrigins: (request) => [
+    ...[process.env.VERCEL_PROJECT_PRODUCTION_URL, process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL]
+      .filter(Boolean)
+      .map((host) => `https://${host}`),
+    request ? new URL(request.url).origin : undefined,
+  ],
   session: { cookieCache: { enabled: true, maxAge: 5 * 60 } },
   // Session và bộ đếm giới hạn tần suất lưu trong Postgres (không cần Redis, chạy được trên serverless).
   rateLimit: {
