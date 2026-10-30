@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { cronAuthorized } from "@/lib/cron-auth";
+import { SITE_URL } from "@/lib/site";
 
 export const maxDuration = 60;
 
@@ -63,5 +64,17 @@ export async function GET(request: NextRequest) {
   // Referer giống proxy ảnh gửi khi tải ảnh của nguồn (kiểm tra host ảnh có chặn hotlink không)
   const referer = request.nextUrl.searchParams.get("referer");
   const results = await Promise.all(urls.map((u) => probe(u, withBody, referer)));
-  return Response.json({ region: process.env.VERCEL_REGION ?? "local", results }, { headers: { "Cache-Control": "no-store" } });
+  // Biến hệ thống của Vercel (không bí mật) — để kiểm tra URL công khai/đăng nhập được suy ra đúng.
+  const env = {
+    VERCEL_ENV: process.env.VERCEL_ENV ?? null,
+    VERCEL_URL: process.env.VERCEL_URL ?? null,
+    VERCEL_PROJECT_PRODUCTION_URL: process.env.VERCEL_PROJECT_PRODUCTION_URL ?? null,
+    VERCEL_REGION: process.env.VERCEL_REGION ?? null,
+    siteUrl: SITE_URL,
+    requestHost: request.headers.get("host"),
+  };
+  return Response.json(
+    { region: process.env.VERCEL_REGION ?? "local", env, results },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
