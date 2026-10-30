@@ -141,8 +141,22 @@ function StoryHeader({ story }: { story: StoryDetail }) {
               ratingCount={story.ratingCount}
             />
           </div>
-          {story.sourceNames.length > 0 && (
-            <p className="mt-4 text-xs text-muted-foreground">Nguồn: {story.sourceNames.join(", ")}</p>
+          {story.sources.length > 0 && (
+            <p className="mt-4 text-xs text-muted-foreground">
+              Nguồn:{" "}
+              {story.sources.map((s, i) => (
+                <span key={s.name}>
+                  {i > 0 && ", "}
+                  {s.url ? (
+                    <a href={s.url} target="_blank" rel="noopener nofollow" className="underline-offset-2 hover:text-primary hover:underline">
+                      {s.name}
+                    </a>
+                  ) : (
+                    s.name
+                  )}
+                </span>
+              ))}
+            </p>
           )}
         </div>
       </div>

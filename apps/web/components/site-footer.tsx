@@ -12,6 +12,13 @@ export function SiteFooter() {
           <p className="max-w-sm text-xs text-muted-foreground/80">
             {SITE_NAME} tổng hợp truyện từ nhiều nguồn trên Internet. Bản quyền thuộc về tác giả và nhóm dịch.
           </p>
+          <p className="max-w-sm text-xs text-muted-foreground/80">
+            Một phần truyện tranh được cung cấp qua API của{" "}
+            <a href="https://mangadex.org" target="_blank" rel="noopener" className="underline underline-offset-2 hover:text-primary">
+              MangaDex
+            </a>{" "}
+            — cảm ơn MangaDex và các nhóm dịch.
+          </p>
         </div>
         <div>
           <h3 className="mb-3 text-sm font-semibold">Khám phá</h3>

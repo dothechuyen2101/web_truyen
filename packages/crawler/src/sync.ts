@@ -275,7 +275,7 @@ async function saveChapters(storyId: number, linkId: number, refs: ChapterRef[])
     await prisma.chapterSource.createMany({
       data: part.flatMap((r) => {
         const chapterId = idByNumber.get(r.number);
-        return chapterId ? [{ chapterId, storySourceId: linkId, path: r.path }] : [];
+        return chapterId ? [{ chapterId, storySourceId: linkId, path: r.path, credit: r.credit }] : [];
       }),
       skipDuplicates: true,
     });

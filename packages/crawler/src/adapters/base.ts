@@ -55,6 +55,10 @@ export abstract class BaseAdapter implements SourceAdapter {
     return new URL(path, `${this.baseUrl}/`).toString();
   }
 
+  webUrl(path: string): string {
+    return this.url(path);
+  }
+
   protected async fetchHtml(path: string): Promise<string> {
     const url = this.url(path);
     const cached = this.pageCache.get(url);

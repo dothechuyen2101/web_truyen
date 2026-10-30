@@ -49,6 +49,7 @@ Việc crawl chạy theo **đợt** (hàm `runCrawlTick`). Mỗi đợt quét tr
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Tuỳ chọn |
 
 5. Bấm **Deploy**. Lúc build, Next.js đọc CSDL để prerender trang chủ và sitemap, nên phải chạy `pnpm db:deploy` (phần Chuẩn bị Supabase) trước.
+6. Vào **Quản trị → Nguồn crawl**, tắt **NetTruyen** và **TruyenQQ**: hai nguồn này chặn IP máy chủ Vercel (403), truyện tranh sẽ lấy từ MangaDex.
 
 Nếu sau này đổi tên miền, nhớ sửa `NEXT_PUBLIC_SITE_URL` và `BETTER_AUTH_URL` rồi **Redeploy**. Các biến `NEXT_PUBLIC_*` được nhúng vào lúc build, nên đổi xong phải build lại mới có hiệu lực.
 
@@ -77,7 +78,7 @@ pnpm make-admin you@example.com
   Với 30 phút một đợt × 120 giây, việc crawl dùng khoảng 1/4 hạn mức RAM.
 - **Proxy ảnh truyện tranh** (`/api/img`) tốn hạn mức nhất. Vercel CDN cache ảnh 1 năm (header `s-maxage`). Khi lượng đọc lớn, chuyển proxy ảnh sang Cloudflare Worker hoặc lên gói Pro.
 - Function chạy ở **Seoul (`icn1`)**, cạnh Supabase, cấu hình trong `vercel.json`. Đổi vùng Supabase thì đổi vùng ở đây cho khớp.
-- **Gói Hobby chỉ dành cho mục đích phi thương mại.** Bật quảng cáo (Quản trị → Quảng cáo) là sử dụng thương mại, phải lên gói Pro.
+- **Gói Hobby chỉ dành cho mục đích phi thương mại.** Điều kiện dùng API MangaDex cũng cấm mọi quảng cáo/dịch vụ thu phí trên site (nhận donate thì được), vì vậy tính năng quảng cáo của site đang tắt.
 - Vercel có thể gỡ nội dung hoặc khoá tài khoản khi nhận khiếu nại bản quyền. Hãy xử lý **Quản trị → Yêu cầu gỡ** kịp thời.
 
 ---
@@ -154,6 +155,7 @@ gunzip -c backups/truyen-XXXX.sql.gz | docker run -i --rm postgres:17-alpine psq
 | "Đợt crawl gần nhất" không đổi | Kiểm tra cronjob trên cron-job.org (URL, `secret`) và `CRON_SECRET` trên Vercel. Gọi thử URL bằng trình duyệt: phải trả `{"ok":true,"started":true}`. |
 | Build trên Vercel lỗi kết nối CSDL | Kiểm tra `DATABASE_URL` trên Vercel và đã chạy `pnpm db:deploy` chưa. |
 | Build trên Vercel lỗi do pnpm | Kiểm tra đã đặt `ENABLE_EXPERIMENTAL_COREPACK=1`. |
+| Không biết nguồn có chặn server không | Gọi `/api/cron/probe?secret=<CRON_SECRET>&url=https://…` (nhiều `url` được): trả mã HTTP, header `server`/`cf-mitigated` và tiêu đề trang khi truy cập từ chính server. "Just a moment…" hay "Access denied" nghĩa là nguồn chặn. |
 | `ENOTFOUND db.<ref>.supabase.co` | Máy không có IPv6. Dùng địa chỉ pooler. |
 | `tenant/user … not found` | Sai cụm pooler (`aws-0` hay `aws-1`) hoặc sai vùng. Copy đúng chuỗi trong trang Connection pooling. |
 | Mạng có proxy/antivirus giải mã TLS (`certificate not trusted`) | Build Docker: `docker build --secret id=extra_ca,src=ca.pem …`. |

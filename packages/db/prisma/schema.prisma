@@ -168,6 +168,8 @@ model ChapterSource {
   storySourceId Int
   /// Đường dẫn tương đối với Source.baseUrl
   path          String
+  /// Nhóm dịch (ghi công ở trình đọc — bắt buộc với MangaDex)
+  credit        String?
 
   chapter     Chapter     @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   storySource StorySource @relation(fields: [storySourceId], references: [id], onDelete: Cascade)

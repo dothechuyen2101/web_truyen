@@ -31,6 +31,8 @@ export interface ChapterRef {
   path: string;
   number: number;
   title?: string;
+  /** Nhóm dịch — hiển thị ở trình đọc (bắt buộc ghi công với MangaDex) */
+  credit?: string;
 }
 
 export type ChapterContent = { kind: "text"; html: string } | { kind: "images"; urls: string[] };
@@ -50,4 +52,6 @@ export interface SourceAdapter {
   getChapterContent(chapterPath: string): Promise<ChapterContent>;
   /** Header cần gửi khi tải ảnh của nguồn (vd Referer để qua chặn hotlink) */
   imageHeaders(imageUrl: string): Record<string, string>;
+  /** URL trang web công khai của truyện/chương trên nguồn (để dẫn link ghi công) */
+  webUrl(path: string): string;
 }

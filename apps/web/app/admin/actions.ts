@@ -9,6 +9,7 @@ import { detectChapterAds, fingerprintImage } from "@truyen/crawler/ads";
 import { mergeStories, splitSource } from "@truyen/crawler/merge";
 import { actionError, assertAdmin, type ActionState } from "@/lib/admin";
 import { auth } from "@/lib/auth";
+import { HOUSE_ADS_ENABLED } from "@/lib/site";
 
 const num = (fd: FormData, key: string) => {
   const value = Number(fd.get(key));
@@ -247,8 +248,11 @@ export async function resolveTakedown(_: ActionState, fd: FormData) {
 
 // ---------- Quảng cáo ----------
 
+const ADS_DISABLED = "Quảng cáo của site đang tắt (điều kiện của MangaDex)";
+
 export async function addHouseAd(_: ActionState, fd: FormData) {
   return run(async () => {
+    if (!HOUSE_ADS_ENABLED) throw new Error(ADS_DISABLED);
     const name = str(fd, "name");
     if (!name) throw new Error("Nhập tên quảng cáo");
     const linkUrl = str(fd, "linkUrl");

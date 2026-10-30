@@ -30,6 +30,16 @@ const sources = [
     baseUrl: "https://wetruyen.com",
     priority: 5,
   },
+  // API chính thức, không chặn IP máy chủ (chạy được trên Vercel). Điều kiện: ghi công MangaDex + nhóm dịch,
+  // không quảng cáo/thu phí. Giới hạn ~5 request/giây → giãn cách 250ms.
+  {
+    key: "mangadex",
+    name: "MangaDex",
+    type: "COMIC",
+    baseUrl: "https://api.mangadex.org",
+    priority: 20,
+    rateLimitMs: 250,
+  },
 ] as const;
 
 for (const s of sources) {

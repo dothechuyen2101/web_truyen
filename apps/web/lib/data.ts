@@ -1,6 +1,7 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { prisma, type Prisma, type StoryStatus, type StoryType } from "@truyen/db";
+import { getAdapter } from "@truyen/crawler";
 import { toSearchText } from "@truyen/shared";
 import { ensureChapterContent } from "./chapter-content";
 import { stripHtml } from "./format";
@@ -135,7 +136,7 @@ export async function getStory(slug: string) {
     include: {
       author: { select: { name: true, slug: true } },
       genres: { select: { genre: { select: { name: true, slug: true } } } },
-      sources: { select: { source: { select: { name: true } } } },
+      sources: { select: { path: true, source: { select: { key: true, name: true, baseUrl: true } } } },
     },
   });
   if (!story || story.hidden) {
@@ -154,7 +155,7 @@ export async function getStory(slug: string) {
     ...rest,
     cover: proxiedImage(coverUrl),
     genres: genres.map((g) => g.genre),
-    sourceNames: sources.map((s) => s.source.name),
+    sources: sources.map((s) => ({ name: s.source.name, url: sourceWebUrl(s.source, s.path) })),
     firstChapter: first?.number ?? null,
     lastChapter: last ?? null,
     rating: story.ratingCount ? story.ratingSum / story.ratingCount : null,
@@ -238,7 +239,35 @@ export async function getHouseAds() {
 }
 export type HouseAd = Awaited<ReturnType<typeof getHouseAds>>[number];
 
-export type ChapterBody = { kind: "text"; html: string } | { kind: "images"; urls: string[] };
+/** Ghi công nguồn + nhóm dịch của nội dung đang hiển thị (MangaDex bắt buộc) */
+export interface ChapterCredit {
+  source: string;
+  url: string | null;
+  group: string | null;
+}
+
+export type ChapterBody = ({ kind: "text"; html: string } | { kind: "images"; urls: string[] }) & {
+  credit: ChapterCredit | null;
+};
+
+/** Trang công khai của truyện/chương trên nguồn; nguồn chưa có adapter thì không có link. */
+function sourceWebUrl(source: { key: string; baseUrl: string }, path: string) {
+  try {
+    return getAdapter(source).webUrl(path);
+  } catch {
+    return null;
+  }
+}
+
+async function chapterCredit(chapterId: number, sourceId: number): Promise<ChapterCredit | null> {
+  const link = await prisma.chapterSource.findFirst({
+    where: { chapterId, storySource: { sourceId } },
+    select: { path: true, credit: true, storySource: { select: { source: { select: { key: true, name: true, baseUrl: true } } } } },
+  });
+  if (!link) return null;
+  const { source } = link.storySource;
+  return { source: source.name, url: sourceWebUrl(source, link.path), group: link.credit };
+}
 
 /** Nội dung chương: lấy từ DB, chưa có thì tải từ nguồn ngay lúc đọc. Nội dung không đổi nên cache lâu. */
 export async function getChapterBody(chapterId: number): Promise<ChapterBody> {
@@ -246,7 +275,8 @@ export async function getChapterBody(chapterId: number): Promise<ChapterBody> {
   cacheLife("max");
   cacheTag(`content-${chapterId}`);
   const content = await ensureChapterContent(chapterId);
-  if (content.text) return { kind: "text", html: content.text };
+  const credit = await chapterCredit(chapterId, content.sourceId);
+  if (content.text) return { kind: "text", html: content.text, credit };
   const urls = Array.isArray(content.images) ? (content.images as string[]) : [];
-  return { kind: "images", urls: urls.map((u) => proxiedImage(u)) };
+  return { kind: "images", urls: urls.map((u) => proxiedImage(u)), credit };
 }

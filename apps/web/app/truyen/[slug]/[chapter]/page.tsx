@@ -11,8 +11,9 @@ import { NovelReader } from "@/components/reader/novel-reader";
 import { ReaderTracker } from "@/components/reader/reader-tracker";
 import { ReadingProgress } from "@/components/reader/reading-progress";
 import { PageTransition, Reveal, SkeletonOut } from "@/components/motion";
-import { getChapter, getChapterAdIndexes, getChapterBody, getHouseAds, getStory } from "@/lib/data";
+import { getChapter, getChapterAdIndexes, getChapterBody, getHouseAds, getStory, type ChapterCredit } from "@/lib/data";
 import { chapterHref, formatChapterNumber, parseChapterParam } from "@/lib/format";
+import { HOUSE_ADS_ENABLED } from "@/lib/site";
 
 type Props = PageProps<"/truyen/[slug]/[chapter]">;
 
@@ -38,11 +39,49 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+/** Ghi công nguồn và nhóm dịch (điều kiện bắt buộc của MangaDex) */
+function CreditLine({ credit }: { credit: ChapterCredit }) {
+  return (
+    <p className="mb-5 text-center text-xs text-muted-foreground">
+      {credit.group && (
+        <>
+          Nhóm dịch: <span className="font-medium text-foreground">{credit.group}</span>
+          {" · "}
+        </>
+      )}
+      Nguồn:{" "}
+      {credit.url ? (
+        <a href={credit.url} target="_blank" rel="noopener nofollow" className="underline-offset-2 hover:text-primary hover:underline">
+          {credit.source}
+        </a>
+      ) : (
+        credit.source
+      )}
+    </p>
+  );
+}
+
 async function ChapterBody({ chapterId, title }: { chapterId: number; title: string }) {
   const body = await getChapterBody(chapterId);
-  if (body.kind === "text") return <NovelReader html={body.html} />;
-  const [adIndexes, houseAds] = await Promise.all([getChapterAdIndexes(chapterId), getHouseAds()]);
-  return <ComicReader urls={body.urls} title={title} adIndexes={adIndexes} houseAds={houseAds} seed={chapterId} />;
+  const credit = body.credit && <CreditLine credit={body.credit} />;
+  if (body.kind === "text") {
+    return (
+      <>
+        {credit}
+        <NovelReader html={body.html} />
+      </>
+    );
+  }
+  const [adIndexes, houseAds] = await Promise.all([
+    getChapterAdIndexes(chapterId),
+    HOUSE_ADS_ENABLED ? getHouseAds() : [],
+  ]);
+  return (
+    <>
+      {credit}
+      <ComicReader urls={body.urls} title={title} adIndexes={adIndexes} houseAds={houseAds} seed={chapterId} />
+    </>
+  );
 }
 
 function BodySkeleton() {

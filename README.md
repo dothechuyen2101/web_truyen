@@ -1,6 +1,8 @@
 # Kho Truyện
 
-Web đọc truyện chữ và truyện tranh. Nội dung được crawl từ nhiều nguồn: truyenfull và wetruyen (truyện chữ), nettruyen và TruyenQQ (truyện tranh). Triển khai production: xem [DEPLOY.md](DEPLOY.md).
+Web đọc truyện chữ và truyện tranh. Nội dung được lấy từ nhiều nguồn: truyenfull và wetruyen (truyện chữ), MangaDex (truyện tranh, qua API chính thức), nettruyen và TruyenQQ (truyện tranh). Triển khai production: xem [DEPLOY.md](DEPLOY.md).
+
+> nettruyen và TruyenQQ chặn IP máy chủ (Cloudflare trả 403 cho Vercel), nên khi chạy trên Vercel hai nguồn này được tắt và truyện tranh lấy từ MangaDex. Không vượt chặn.
 
 ## Cấu trúc
 
@@ -54,7 +56,8 @@ pnpm crawl preview <url>                                    # chỉ parse, khôn
 - **Một truyện có thể có nhiều nguồn** (`StorySource`). Khi nguồn ưu tiên lỗi, hệ thống tự chuyển sang nguồn khác.
 - **Truyện bị nguồn chặn** (403, ví dụ Cloudflare challenge) hoặc đã bị xoá (404) được bỏ qua trong 7 ngày, không thử lại. Nguồn trả 429/503 thì HTTP client tạm dừng cả host đó.
 - **Truyện trùng giữa các nguồn** được ghép tự động theo tiêu đề. Admin có thể gộp hoặc tách thủ công ở trang chi tiết truyện.
-- **Ảnh quảng cáo nguồn chèn vào chương truyện tranh** được nhận diện bằng dHash, so với các mẫu admin đã đánh dấu, rồi thay bằng quảng cáo của site (Quản trị → Quảng cáo).
+- **Ảnh quảng cáo nguồn chèn vào chương truyện tranh** được nhận diện bằng dHash, so với các mẫu admin đã đánh dấu, rồi ẩn đi. Tính năng thay bằng quảng cáo của site đang tắt (`HOUSE_ADS_ENABLED` trong `apps/web/lib/site.ts`).
+- **MangaDex**: điều kiện dùng API là ghi công MangaDex và nhóm dịch (hiện ở trình đọc, trang truyện, footer), gỡ truyện khi nhóm dịch yêu cầu, và **không chạy quảng cáo/dịch vụ thu phí** trên site. Ảnh lấy từ máy chủ gốc `uploads.mangadex.org` (chất lượng data-saver) qua proxy, User-Agent thật, giãn cách 250ms (giới hạn ~5 request/giây). Chỉ lấy truyện loại an toàn/gợi cảm.
 
 ## Thêm nguồn mới
 

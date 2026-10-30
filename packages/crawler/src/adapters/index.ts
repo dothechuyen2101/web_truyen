@@ -1,6 +1,7 @@
 import { HttpClient } from "../http";
 import type { SourceAdapter } from "../types";
 import type { AdapterOptions } from "./base";
+import { MangadexAdapter } from "./mangadex";
 import { NettruyenAdapter } from "./nettruyen";
 import { TruyenfullAdapter } from "./truyenfull";
 import { TruyenqqAdapter } from "./truyenqq";
@@ -11,6 +12,7 @@ const ADAPTERS: Record<string, new (opts: AdapterOptions) => SourceAdapter> = {
   nettruyen: NettruyenAdapter,
   truyenqq: TruyenqqAdapter,
   wetruyen: WetruyenAdapter,
+  mangadex: MangadexAdapter,
 };
 
 export const adapterKeys = Object.keys(ADAPTERS);
@@ -48,4 +50,4 @@ export function isAllowedImageHost(adapter: SourceAdapter, imageUrl: string): bo
   return allowed.some((h) => host === h || host.endsWith(`.${h}`));
 }
 
-export { NettruyenAdapter, TruyenfullAdapter, TruyenqqAdapter, WetruyenAdapter };
+export { MangadexAdapter, NettruyenAdapter, TruyenfullAdapter, TruyenqqAdapter, WetruyenAdapter };

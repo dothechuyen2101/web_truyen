@@ -5,6 +5,7 @@ import { AdminHeader, AdminSkeleton, Badge, Empty, Panel, StatCard, inputClass }
 import { requireAdmin } from "@/lib/admin";
 import { formatChapterNumber, formatNumber, parseChapterParam } from "@/lib/format";
 import { proxiedImage } from "@/lib/image-proxy";
+import { HOUSE_ADS_ENABLED } from "@/lib/site";
 import { addHouseAd, deleteFingerprint, markAdImage, rescanAds, updateHouseAd } from "../actions";
 
 /** Số ảnh đầu/cuối chương hiển thị để đánh dấu (khớp với vùng worker kiểm tra) */
@@ -70,7 +71,11 @@ async function Ads({ searchParams }: Pick<PageProps<"/admin/quang-cao">, "search
     <>
       <AdminHeader
         title="Quảng cáo"
-        description="Nhận diện ảnh quảng cáo nguồn chèn vào chương truyện tranh và thay bằng quảng cáo của site (không có quảng cáo nào đang bật thì ảnh quảng cáo của nguồn bị ẩn)."
+        description={
+          HOUSE_ADS_ENABLED
+            ? "Nhận diện ảnh quảng cáo nguồn chèn vào chương truyện tranh và thay bằng quảng cáo của site (không có quảng cáo nào đang bật thì ảnh quảng cáo của nguồn bị ẩn)."
+            : "Nhận diện ảnh quảng cáo nguồn chèn vào chương truyện tranh và ẩn đi."
+        }
       />
       <div className="mb-6 grid grid-cols-3 gap-3">
         <StatCard label="Quảng cáo của site" value={houseAds.filter((a) => a.enabled).length} hint={`${houseAds.length} tổng`} />
@@ -79,13 +84,22 @@ async function Ads({ searchParams }: Pick<PageProps<"/admin/quang-cao">, "search
       </div>
 
       <div className="space-y-6">
+        {!HOUSE_ADS_ENABLED && (
+          <Panel title="Quảng cáo của site đang tắt">
+            <p className="text-sm text-muted-foreground">
+              Điều kiện dùng API MangaDex cấm mọi quảng cáo và dịch vụ thu phí trên site (cho phép nhận donate), gói Vercel
+              Hobby cũng chỉ cho dùng phi thương mại. Quảng cáo bên dưới (nếu có) không được hiển thị. Muốn bật lại phải
+              ngừng dùng nguồn MangaDex rồi đổi <code>HOUSE_ADS_ENABLED</code> trong <code>lib/site.ts</code>.
+            </p>
+          </Panel>
+        )}
         <Panel title="Quảng cáo của site" description="Hiển thị thay cho ảnh quảng cáo của nguồn, xoay vòng giữa các quảng cáo đang bật.">
-          <ActionForm action={addHouseAd} className="mb-4 grid gap-2 sm:grid-cols-[1fr_2fr_2fr_auto]">
+          {HOUSE_ADS_ENABLED && <ActionForm action={addHouseAd} className="mb-4 grid gap-2 sm:grid-cols-[1fr_2fr_2fr_auto]">
             <input name="name" placeholder="Tên" required className={inputClass} />
             <input name="imageUrl" placeholder="URL ảnh (https://…)" required className={inputClass} />
             <input name="linkUrl" placeholder="Link khi bấm (tuỳ chọn)" className={inputClass} />
             <SubmitButton variant="default">Thêm</SubmitButton>
-          </ActionForm>
+          </ActionForm>}
           {houseAds.length ? (
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {houseAds.map((ad) => (
