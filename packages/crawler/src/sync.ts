@@ -226,14 +226,16 @@ export async function saveStory(
     ]);
   }
 
-  const { newChapters, totalChapters } = await saveChapters(storyId, linkId, chapterRefs);
+  const available = chapterRefs.filter((c) => !c.unavailable);
+  const { newChapters, totalChapters } = await saveChapters(storyId, linkId, available);
+  // Tính cả chương chưa đọc được: số này so với trang "mới cập nhật" để biết truyện có chương mới không.
   const latestNumber = chapterRefs.reduce((max, c) => Math.max(max, c.number), 0) || null;
 
   await prisma.$transaction([
     prisma.storySource.update({
       where: { id: linkId },
       data: {
-        chapterCount: chapterRefs.length,
+        chapterCount: available.length,
         latestChapterNumber: latestNumber,
         lastSyncedAt: new Date(),
         lastError: null,
@@ -294,15 +296,19 @@ export interface DiscoverResult {
 }
 
 /** Đọc các trang "mới cập nhật" và trả về những truyện mới hoặc có chương mới so với DB. */
+/** Backfill: truyện đã đồng bộ trong khoảng này thì bỏ qua (danh sách toàn bộ không cho biết chương mới nhất) */
+const BACKFILL_RESYNC_MS = 24 * 3600_000;
+
 export async function discoverLatest(
   source: Source,
-  { fromPage = 1, pages = 1 }: { fromPage?: number; pages?: number } = {},
+  { fromPage = 1, pages = 1, all = false }: { fromPage?: number; pages?: number; all?: boolean } = {},
 ): Promise<DiscoverResult> {
   const adapter = getAdapter(source);
+  const list = all && adapter.listAll ? adapter.listAll.bind(adapter) : adapter.listLatest.bind(adapter);
   const refs: StoryRef[] = [];
   let page = fromPage;
   for (; page < fromPage + pages; page++) {
-    const result = await adapter.listLatest(page);
+    const result = await list(page);
     refs.push(...result.items);
     if (!result.hasNext) {
       page++;
@@ -312,15 +318,19 @@ export async function discoverLatest(
 
   const links = await prisma.storySource.findMany({
     where: { sourceId: source.id, path: { in: refs.map((r) => r.path) } },
-    select: { path: true, latestChapterNumber: true },
+    select: { path: true, latestChapterNumber: true, lastSyncedAt: true },
   });
-  const latestByPath = new Map(links.map((l) => [l.path, l.latestChapterNumber]));
+  const linkByPath = new Map(links.map((l) => [l.path, l]));
 
   const toSync = refs
     .filter((r) => {
-      if (!latestByPath.has(r.path)) return true;
-      const known = latestByPath.get(r.path);
-      return r.latestChapter === undefined || known == null || r.latestChapter > known;
+      const link = linkByPath.get(r.path);
+      if (!link) return true;
+      if (r.latestChapter === undefined) {
+        // Backfill dở dang được làm tiếp ở đợt sau: không đồng bộ lại truyện vừa đồng bộ.
+        return !(all && link.lastSyncedAt && Date.now() - link.lastSyncedAt.getTime() < BACKFILL_RESYNC_MS);
+      }
+      return link.latestChapterNumber == null || r.latestChapter > link.latestChapterNumber;
     })
     .map((r) => r.path);
 

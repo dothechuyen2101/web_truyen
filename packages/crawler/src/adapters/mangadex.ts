@@ -17,6 +17,9 @@ const CONTENT_RATINGS = ["safe", "suggestive"];
 const EXCLUDED_TAGS = new Set(["Loli", "Shota", "Incest", "Sexual Violence"]);
 const UPLOADS = "https://uploads.mangadex.org";
 const LATEST_PAGE_SIZE = 100;
+const LIST_PAGE_SIZE = 100;
+/** Backfill lấy truyện gốc Trung/Hàn (manhua, manhwa) trước, rồi tới phần còn lại */
+const PRIORITY_LANGUAGES = ["zh", "zh-hk", "ko"];
 const FEED_PAGE_SIZE = 500;
 /** API không cho offset + limit vượt quá mốc này */
 const MAX_OFFSET = 10_000;
@@ -181,6 +184,16 @@ export function parseMangadexLatest(json: ListResponse<ChapterData>): StoryListP
   return { items: [...byManga.values()], hasNext: next < json.total && next + json.limit <= MAX_OFFSET };
 }
 
+/** "/manga" (danh sách toàn bộ cho backfill) → truyện; không có số chương mới nhất. */
+export function parseMangadexMangaList(json: ListResponse<MangaData>): StoryListPage {
+  const items = json.data
+    .filter((m) => !isExcluded(m.attributes))
+    .map((m): StoryRef => ({ path: `/manga/${m.id}`, title: pickTitle(m.attributes) }))
+    .filter((r) => r.title);
+  const next = json.offset + json.limit;
+  return { items, hasNext: next < json.total && next + json.limit <= MAX_OFFSET };
+}
+
 export function parseMangadexStory(json: { data: MangaData }, path: string): StoryDetail {
   const { id, attributes: a, relationships } = json.data;
   if (isExcluded(a)) throw new ParseError("Truyện có nội dung bị loại trừ", path);
@@ -308,6 +321,35 @@ export class MangadexAdapter extends BaseAdapter {
       ["includeFuturePublishAt", 0],
     ]);
     return parseMangadexLatest(json);
+  }
+
+  /** Số trang của nhóm ưu tiên (manhua/manhwa) — tính một lần mỗi tiến trình */
+  private priorityPages?: number;
+
+  async listAll(page: number): Promise<StoryListPage> {
+    const common: [string, string | number][] = [
+      ["availableTranslatedLanguage[]", LANGUAGE],
+      ["hasAvailableChapters", "true"],
+      ["order[followedCount]", "desc"],
+      ...this.ratings(),
+    ];
+    const priority = PRIORITY_LANGUAGES.map((l): [string, string] => ["originalLanguage[]", l]);
+    const rest = PRIORITY_LANGUAGES.map((l): [string, string] => ["excludedOriginalLanguage[]", l]);
+    this.priorityPages ??= Math.ceil(
+      (await this.api<ListResponse<MangaData>>("/manga", [...common, ...priority, ["limit", 1]])).total / LIST_PAGE_SIZE,
+    );
+
+    const inPriority = page <= this.priorityPages;
+    const offset = ((inPriority ? page : page - this.priorityPages) - 1) * LIST_PAGE_SIZE;
+    const json = await this.api<ListResponse<MangaData>>("/manga", [
+      ...common,
+      ...(inPriority ? priority : rest),
+      ["limit", LIST_PAGE_SIZE],
+      ["offset", offset],
+    ]);
+    const result = parseMangadexMangaList(json);
+    // Hết nhóm ưu tiên thì chuyển sang nhóm còn lại.
+    return inPriority ? { ...result, hasNext: true } : result;
   }
 
   async getStory(path: string): Promise<StoryDetail> {

@@ -1,6 +1,6 @@
 # Kho Truyện
 
-Web đọc truyện chữ và truyện tranh. Nội dung được lấy từ nhiều nguồn: truyenfull và wetruyen (truyện chữ), MangaDex (truyện tranh, qua API chính thức), nettruyen và TruyenQQ (truyện tranh). Triển khai production: xem [DEPLOY.md](DEPLOY.md).
+Web đọc truyện chữ và truyện tranh. Nội dung được lấy từ nhiều nguồn: truyenfull và wetruyen (truyện chữ), MangaDex (truyện tranh, qua API chính thức), ManhuaVN (manhua), nettruyen và TruyenQQ (truyện tranh). Triển khai production: xem [DEPLOY.md](DEPLOY.md).
 
 > nettruyen và TruyenQQ chặn IP máy chủ (Cloudflare trả 403 cho Vercel), nên khi chạy trên Vercel hai nguồn này được tắt và truyện tranh lấy từ MangaDex. Không vượt chặn.
 
@@ -57,7 +57,8 @@ pnpm crawl preview <url>                                    # chỉ parse, khôn
 - **Truyện bị nguồn chặn** (403, ví dụ Cloudflare challenge) hoặc đã bị xoá (404) được bỏ qua trong 7 ngày, không thử lại. Nguồn trả 429/503 thì HTTP client tạm dừng cả host đó.
 - **Truyện trùng giữa các nguồn** được ghép tự động theo tiêu đề. Admin có thể gộp hoặc tách thủ công ở trang chi tiết truyện.
 - **Ảnh quảng cáo nguồn chèn vào chương truyện tranh** được nhận diện bằng dHash, so với các mẫu admin đã đánh dấu, rồi ẩn đi. Tính năng thay bằng quảng cáo của site đang tắt (`HOUSE_ADS_ENABLED` trong `apps/web/lib/site.ts`).
-- **MangaDex**: điều kiện dùng API là ghi công MangaDex và nhóm dịch (hiện ở trình đọc, trang truyện, footer), gỡ truyện khi nhóm dịch yêu cầu, và **không chạy quảng cáo/dịch vụ thu phí** trên site. Ảnh lấy từ máy chủ gốc `uploads.mangadex.org` (chất lượng data-saver) qua proxy, User-Agent thật, giãn cách 250ms (giới hạn ~5 request/giây). Chỉ lấy truyện loại an toàn/gợi cảm.
+- **MangaDex**: điều kiện dùng API là ghi công MangaDex và nhóm dịch (hiện ở trình đọc, trang truyện, footer), gỡ truyện khi nhóm dịch yêu cầu, và **không chạy quảng cáo/dịch vụ thu phí** trên site. Ảnh lấy từ máy chủ gốc `uploads.mangadex.org` (chất lượng data-saver) qua proxy, User-Agent thật, giãn cách 250ms (giới hạn ~5 request/giây). Chỉ lấy truyện loại an toàn/gợi cảm. Backfill (Quản trị → Nguồn crawl) duyệt toàn bộ kho tiếng Việt, manhua/manhwa trước.
+- **ManhuaVN** (manhuavn2.com): phần lớn chương mới chỉ có trên app của nguồn, web thường chỉ mở vài chương đầu. Adapter dò ranh giới chương mở (vài request mỗi truyện) và chỉ đưa lên chương đọc được; chương khoá vẫn tính vào số chương mới nhất (`ChapterRef.unavailable`) để không đồng bộ lại liên tục. Không đọc `/ajax/`, `/api/` (robots.txt cấm).
 
 ## Thêm nguồn mới
 

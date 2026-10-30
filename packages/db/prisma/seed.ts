@@ -40,6 +40,16 @@ const sources = [
     priority: 20,
     rateLimitMs: 250,
   },
+  // Truyện tranh Trung Quốc, không chặn IP máy chủ. Phần lớn chương mới chỉ có trên app của nguồn —
+  // adapter chỉ lấy các chương đọc được trên web.
+  {
+    key: "manhuavn",
+    name: "ManhuaVN",
+    type: "COMIC",
+    baseUrl: "https://manhuavn2.com",
+    priority: 12,
+    rateLimitMs: 500,
+  },
 ] as const;
 
 for (const s of sources) {

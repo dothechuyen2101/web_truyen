@@ -130,7 +130,7 @@ export async function runCrawlTick({
             const chunk = await withCrawlRun(
               "backfill",
               { sourceId: source.id, target: `trang ${page}–${page + backfillPages - 1}` },
-              () => discoverLatest(source, { fromPage: page!, pages: backfillPages }),
+              () => discoverLatest(source, { fromPage: page!, pages: backfillPages, all: true }),
             );
             stats.backfillPages += chunk.pages;
             // Hết giờ giữa chừng → giữ nguyên trang, đợt sau làm tiếp (truyện đã đồng bộ sẽ không lặp lại).

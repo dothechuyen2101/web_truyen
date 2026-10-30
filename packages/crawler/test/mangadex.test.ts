@@ -3,6 +3,7 @@ import {
   parseMangadexAtHome,
   parseMangadexChapters,
   parseMangadexLatest,
+  parseMangadexMangaList,
   parseMangadexStory,
 } from "../src/adapters/mangadex";
 import { fixture } from "./helpers";
@@ -60,6 +61,14 @@ describe("mangadex", () => {
     expect(parseMangadexLatest(page(0, ["Magic"])).items).toHaveLength(1);
     expect(parseMangadexLatest(page(9_800, [])).hasNext).toBe(true);
     expect(parseMangadexLatest(page(9_900, [])).hasNext).toBe(false);
+  });
+
+  it("danh sách toàn bộ cho backfill: tên Việt, không có số chương mới nhất", () => {
+    const { items, hasNext } = parseMangadexMangaList(json("list"));
+    expect(hasNext).toBe(true);
+    expect(items).toHaveLength(5);
+    expect(items[0]).toEqual({ path: "/manga/32d76d19-8a05-4db0-9fc2-e0b0648fe9d0", title: "Tôi Thăng Cấp Một Mình" });
+    expect(items.every((i) => i.latestChapter === undefined)).toBe(true);
   });
 
   it("đọc thông tin truyện: tên Việt, thể loại map sang tên của site, ảnh bìa trên uploads.mangadex.org", () => {

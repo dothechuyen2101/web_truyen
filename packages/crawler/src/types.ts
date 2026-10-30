@@ -33,6 +33,11 @@ export interface ChapterRef {
   title?: string;
   /** Nhóm dịch — hiển thị ở trình đọc (bắt buộc ghi công với MangaDex) */
   credit?: string;
+  /**
+   * Chương có ở nguồn nhưng chưa đọc được (vd chỉ có trên app của nguồn): không tạo chương,
+   * nhưng vẫn tính vào số chương mới nhất để không phải đồng bộ lại truyện ở mỗi đợt crawl.
+   */
+  unavailable?: boolean;
 }
 
 export type ChapterContent = { kind: "text"; html: string } | { kind: "images"; urls: string[] };
@@ -46,6 +51,8 @@ export interface SourceAdapter {
 
   /** Trang danh sách "mới cập nhật". Duyệt tới trang cuối cũng chính là backfill toàn bộ nguồn. */
   listLatest(page: number): Promise<StoryListPage>;
+  /** Danh sách toàn bộ truyện cho backfill, khi "mới cập nhật" không phủ hết kho (mặc định dùng listLatest) */
+  listAll?(page: number): Promise<StoryListPage>;
   getStory(path: string): Promise<StoryDetail>;
   /** Danh sách chương, sắp xếp tăng dần theo số chương */
   getChapterList(storyPath: string): Promise<ChapterRef[]>;
