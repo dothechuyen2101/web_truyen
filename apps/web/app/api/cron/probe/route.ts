@@ -11,7 +11,7 @@ const TIMEOUT_MS = 12_000;
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
 
-async function probe(raw: string, withBody: boolean) {
+async function probe(raw: string, withBody: boolean, referer: string | null) {
   let url: URL;
   try {
     url = new URL(raw);
@@ -25,7 +25,11 @@ async function probe(raw: string, withBody: boolean) {
       cache: "no-store",
       redirect: "follow",
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/json;q=0.9,*/*;q=0.8" },
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept: "text/html,application/json;q=0.9,*/*;q=0.8",
+        ...(referer && { Referer: referer }),
+      },
     });
     const type = res.headers.get("content-type") ?? "";
     const showBody = withBody && BODY_HOSTS.has(url.hostname);
@@ -56,6 +60,8 @@ export async function GET(request: NextRequest) {
   if (!cronAuthorized(request)) return Response.json({ ok: false }, { status: 401 });
   const urls = request.nextUrl.searchParams.getAll("url").slice(0, MAX_URLS);
   const withBody = request.nextUrl.searchParams.get("body") === "1";
-  const results = await Promise.all(urls.map((u) => probe(u, withBody)));
+  // Referer giống proxy ảnh gửi khi tải ảnh của nguồn (kiểm tra host ảnh có chặn hotlink không)
+  const referer = request.nextUrl.searchParams.get("referer");
+  const results = await Promise.all(urls.map((u) => probe(u, withBody, referer)));
   return Response.json({ region: process.env.VERCEL_REGION ?? "local", results }, { headers: { "Cache-Control": "no-store" } });
 }
