@@ -11,7 +11,15 @@ import { NovelReader } from "@/components/reader/novel-reader";
 import { ReaderTracker } from "@/components/reader/reader-tracker";
 import { ReadingProgress } from "@/components/reader/reading-progress";
 import { PageTransition, Reveal, SkeletonOut } from "@/components/motion";
-import { getChapter, getChapterAdIndexes, getChapterBody, getHouseAds, getStory, type ChapterCredit } from "@/lib/data";
+import {
+  getChapter,
+  getChapterAdIndexes,
+  getChapterBody,
+  getHouseAds,
+  getStory,
+  isChapterReadable,
+  type ChapterCredit,
+} from "@/lib/data";
 import { chapterHref, formatChapterNumber, parseChapterParam } from "@/lib/format";
 import { HOUSE_ADS_ENABLED } from "@/lib/site";
 
@@ -61,7 +69,20 @@ function CreditLine({ credit }: { credit: ChapterCredit }) {
   );
 }
 
+function ChapterUnavailable() {
+  return (
+    <div className="rounded-2xl border border-dashed p-8 text-center">
+      <p className="font-semibold">Chương này hiện chưa đọc được.</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Nguồn của chương đã ngừng hoạt động và chương chưa từng được tải về. Bạn thử chương khác hoặc quay lại sau nhé.
+      </p>
+    </div>
+  );
+}
+
 async function ChapterBody({ chapterId, title }: { chapterId: number; title: string }) {
+  // Kiểm tra trước (cache ngắn) — getChapterBody cache vĩnh viễn nên không được trả về trạng thái tạm thời.
+  if (!(await isChapterReadable(chapterId))) return <ChapterUnavailable />;
   const body = await getChapterBody(chapterId);
   const credit = body.credit && <CreditLine credit={body.credit} />;
   if (body.kind === "text") {

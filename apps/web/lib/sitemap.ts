@@ -1,6 +1,7 @@
 import "server-only";
 import { cacheLife } from "next/cache";
 import { prisma } from "@truyen/db";
+import { READABLE_STORY } from "./data";
 
 /** Số truyện tối đa mỗi file sitemap (Google giới hạn 50.000 URL) */
 export const STORIES_PER_SITEMAP = 40_000;
@@ -18,8 +19,7 @@ export async function storySitemapEntries(index: number) {
   cacheLife("hours");
   return prisma.story.findMany({
     where: {
-      hidden: false,
-      chapterCount: { gt: 0 },
+      ...READABLE_STORY,
       id: { gt: index * STORIES_PER_SITEMAP, lte: (index + 1) * STORIES_PER_SITEMAP },
     },
     select: { slug: true, updatedAt: true },

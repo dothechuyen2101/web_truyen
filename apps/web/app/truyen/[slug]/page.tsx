@@ -141,6 +141,11 @@ function StoryHeader({ story }: { story: StoryDetail }) {
               ratingCount={story.ratingCount}
             />
           </div>
+          {!story.readable && (
+            <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+              Truyện tạm ngừng cập nhật: nguồn truyện đã ngừng hoạt động, chỉ đọc được các chương đã tải trước đó.
+            </p>
+          )}
           {story.sources.length > 0 && (
             <p className="mt-4 text-xs text-muted-foreground">
               Nguồn:{" "}

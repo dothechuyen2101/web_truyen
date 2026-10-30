@@ -27,6 +27,7 @@ const MIN_TIME_FOR_AD_CHECK_MS = 8_000;
 /** Đợt chạy RUNNING lâu hơn thế này là đã bị ngắt (function hết thời gian) */
 const STALE_RUN_MS = 15 * 60_000;
 const CRAWL_RUN_RETENTION_DAYS = 30;
+const PENDING_LINKS_PER_TICK = 20;
 /** Khoá tự hết hạn sau ngân sách + khoảng này (phòng khi tiến trình bị ngắt, không kịp nhả khoá) */
 const LOCK_GRACE_MS = 5 * 60_000;
 
@@ -113,6 +114,15 @@ export async function runCrawlTick({
           );
           stats.checked += latest.checked;
           if (!(await syncAll(source, latest.toSync))) return;
+
+          // Liên kết được thêm sẵn nhưng chưa đồng bộ lần nào (gắn tay, hoặc tìm thấy truyện ở nguồn khác).
+          // Lỗi thì lastError được ghi lại → không thử lại tự động, admin đồng bộ lại thủ công.
+          const pending = await prisma.storySource.findMany({
+            where: { sourceId: source.id, lastSyncedAt: null, lastError: null },
+            select: { path: true },
+            take: PENDING_LINKS_PER_TICK,
+          });
+          if (!(await syncAll(source, pending.map((p) => p.path)))) return;
 
           // Backfill: duyệt dần toàn bộ danh sách của nguồn qua nhiều đợt.
           let page = source.backfillPage;

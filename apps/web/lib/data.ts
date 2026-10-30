@@ -56,6 +56,16 @@ export interface ListParams {
   limit?: number;
 }
 
+/**
+ * Truyện hiển thị công khai: không bị ẩn, có chương, và còn ít nhất một nguồn đang bật
+ * (nguồn bị tắt — vd chặn IP máy chủ — thì chương chưa tải không đọc được nữa).
+ */
+export const READABLE_STORY = {
+  hidden: false,
+  chapterCount: { gt: 0 },
+  sources: { some: { source: { enabled: true } } },
+} satisfies Prisma.StoryWhereInput;
+
 export async function listStories(params: ListParams) {
   "use cache";
   cacheLife("minutes");
@@ -65,8 +75,7 @@ export async function listStories(params: ListParams) {
   const limit = params.limit ?? PAGE_SIZE;
   const q = params.q ? toSearchText(params.q) : "";
   const where: Prisma.StoryWhereInput = {
-    hidden: false,
-    chapterCount: { gt: 0 },
+    ...READABLE_STORY,
     type: params.type,
     status: params.status,
     ...(params.genre && { genres: { some: { genre: { slug: params.genre } } } }),
@@ -92,7 +101,7 @@ export async function getFeatured(limit = 6) {
   cacheLife("hours");
   cacheTag("stories");
   const rows = await prisma.story.findMany({
-    where: { hidden: false, chapterCount: { gt: 0 }, coverUrl: { not: null }, description: { not: null } },
+    where: { ...READABLE_STORY, coverUrl: { not: null }, description: { not: null } },
     orderBy: [{ viewCount: "desc" }, { latestChapterAt: { sort: "desc", nulls: "last" } }],
     take: limit,
     select: {
@@ -114,7 +123,7 @@ export async function getGenres() {
   cacheLife("hours");
   cacheTag("genres");
   return prisma.genre.findMany({
-    where: { stories: { some: { story: { hidden: false } } } },
+    where: { stories: { some: { story: READABLE_STORY } } },
     orderBy: { name: "asc" },
     select: { name: true, slug: true },
   });
@@ -136,7 +145,7 @@ export async function getStory(slug: string) {
     include: {
       author: { select: { name: true, slug: true } },
       genres: { select: { genre: { select: { name: true, slug: true } } } },
-      sources: { select: { path: true, source: { select: { key: true, name: true, baseUrl: true } } } },
+      sources: { select: { path: true, source: { select: { key: true, name: true, baseUrl: true, enabled: true } } } },
     },
   });
   if (!story || story.hidden) {
@@ -156,6 +165,8 @@ export async function getStory(slug: string) {
     cover: proxiedImage(coverUrl),
     genres: genres.map((g) => g.genre),
     sources: sources.map((s) => ({ name: s.source.name, url: sourceWebUrl(s.source, s.path) })),
+    /** Còn nguồn đang bật — không thì chỉ đọc được các chương đã tải trước đó */
+    readable: sources.some((s) => s.source.enabled),
     firstChapter: first?.number ?? null,
     lastChapter: last ?? null,
     rating: story.ratingCount ? story.ratingSum / story.ratingCount : null,
@@ -267,6 +278,20 @@ async function chapterCredit(chapterId: number, sourceId: number): Promise<Chapt
   if (!link) return null;
   const { source } = link.storySource;
   return { source: source.name, url: sourceWebUrl(source, link.path), group: link.credit };
+}
+
+/** Chương đọc được không: đã có nội dung, hoặc còn nguồn đang bật để tải. */
+export async function isChapterReadable(chapterId: number) {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag(`content-${chapterId}`, "sources");
+  const count = await prisma.chapter.count({
+    where: {
+      id: chapterId,
+      OR: [{ content: { isNot: null } }, { sources: { some: { storySource: { source: { enabled: true } } } } }],
+    },
+  });
+  return count > 0;
 }
 
 /** Nội dung chương: lấy từ DB, chưa có thì tải từ nguồn ngay lúc đọc. Nội dung không đổi nên cache lâu. */

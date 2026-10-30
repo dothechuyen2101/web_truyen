@@ -63,6 +63,7 @@ export async function updateSource(_: ActionState, fd: FormData) {
       },
     });
     updateTag("sources");
+    updateTag("stories");
     return "Đã lưu cấu hình nguồn";
   });
 }
