@@ -245,12 +245,15 @@ export function parseMangadexChapters(chapters: ChapterData[]): ChapterRef[] {
     }
   }
 
+  // Truyện chỉ có chương không số (oneshot, tuyển tập) → đánh 1, 2, …; có lẫn chương có số thì
+  // ensureUniqueNumbers chèn số lẻ sau chương cuối (vd 12.01 cho chương "Extra").
+  const onlyUnnumbered = byNumber.size === 0;
   const refs = [...[...byNumber.entries()].sort(([a], [b]) => a - b).map(([, c]) => c), ...unnumbered]
-    .map((c): ChapterRef => {
+    .map((c, i): ChapterRef => {
       const groups = groupNames(c);
       return {
         path: `/chapter/${c.id}`,
-        number: chapterNumber(c.attributes.chapter),
+        number: onlyUnnumbered ? i + 1 : chapterNumber(c.attributes.chapter),
         title: c.attributes.title?.trim() || (c.attributes.chapter === null ? "Oneshot" : undefined),
         credit: groups.length ? groups.join(" & ") : undefined,
       };

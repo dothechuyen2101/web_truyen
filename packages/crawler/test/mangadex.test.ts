@@ -116,6 +116,14 @@ describe("mangadex", () => {
     expect(chapters.at(-1)?.title).toBe("Oneshot");
   });
 
+  it("truyện chỉ có chương không số (oneshot) được đánh 1, 2, … thay vì 0.01", () => {
+    const chapters = parseMangadexChapters([chapter("1", null, "A"), chapter("2", null, "A")]);
+    expect(chapters.map((c) => [c.number, c.title])).toEqual([
+      [1, "Oneshot"],
+      [2, "Oneshot"],
+    ]);
+  });
+
   it("ảnh chương: URL máy chủ gốc chất lượng data-saver, không dùng node MangaDex@Home tạm thời", () => {
     const content = parseMangadexAtHome(json("athome"));
     expect(content.kind).toBe("images");
